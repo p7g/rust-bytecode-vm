@@ -1,6 +1,6 @@
 #[derive(Debug)]
 #[repr(u8)]
-pub enum OpCode {
+pub enum OpCode { // When adding to this enum, make sure to add to TryFrom<u8>
     Noop = 0,
     ConstInt,
     ConstDouble,
