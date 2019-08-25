@@ -215,11 +215,6 @@ mod tests {
             code_object: CodeObject::new(Vec::new()),
             upvalues: &[],
         };
-        let c = FunctionValue::Builtin {
-            name: Some(123),
-            arity: 1,
-            function: builtin_function,
-        };
         let d = FunctionValue::User {
             name: Some(123),
             arity: 1,
