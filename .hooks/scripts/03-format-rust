@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+if ! cargo fmt --help >/dev/null 2>&1; then
+    echo 'Installing rustfmt (https://github.com/rust-lang/rustfmt)' \
+        > $AUTOHOOK_STDOUT
+
+    if ! rustup component add rustfmt > $AUTOHOOK_STDOUT 2> $AUTOHOOK_STDERR; then
+        echo 'Failed to install clippy. See output above'
+        exit 1
+    fi
+fi
+
+if ! cargo fmt -- --check; then
+    cargo fmt
+    exit 1
+fi
