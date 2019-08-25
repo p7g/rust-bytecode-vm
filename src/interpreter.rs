@@ -6,12 +6,12 @@ use crate::opcode::OpCode;
 use crate::value::Value;
 
 pub struct Interpreter<'a> {
-    agent: Agent<'a>,
+    agent: &'a mut Agent<'a>,
     stack: Vec<Value<'a>>,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(agent: Agent<'a>) -> Interpreter<'a> {
+    pub fn new(agent: &'a mut Agent<'a>) -> Interpreter<'a> {
         Interpreter {
             agent,
             stack: Vec::new(),
