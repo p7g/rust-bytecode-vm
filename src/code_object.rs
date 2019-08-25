@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub struct CodeObject {
     pub instructions: Vec<u8>,
 }
