@@ -19,7 +19,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    pub fn evaluate(&mut self, code_object: CodeObject) -> Result<(), String> {
+    pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value<'a>, String> {
         let mut ip = 0;
 
         macro_rules! push {
@@ -121,6 +121,10 @@ impl<'a> Interpreter<'a> {
             }
         }
 
-        Ok(())
+        Ok(if let Some(value) = self.stack.pop() {
+            value
+        } else {
+            Value::Null
+        })
     }
 }
