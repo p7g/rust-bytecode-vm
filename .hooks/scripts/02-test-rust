@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+cargo test -- --color always > $AUTOHOOK_STDOUT
+exit $?

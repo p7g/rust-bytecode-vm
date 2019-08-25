@@ -10,5 +10,7 @@ if ! cargo clippy --help >/dev/null 2>&1; then
     fi
 fi
 
-cargo clippy
+cargo clippy --manifest-path="$AUTOHOOK_REPO_ROOT/Cargo.toml" \
+    > $AUTOHOOK_STDOUT \
+    2> $AUTOHOOK_STDERR
 exit $?
