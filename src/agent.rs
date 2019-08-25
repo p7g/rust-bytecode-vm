@@ -9,16 +9,17 @@ impl<'a> Agent<'a> {
         }
     }
 
-    pub fn intern_string(&mut self, s: &'a str) -> &'a str {
-        if let Some(ptr) = self
+    pub fn intern_string(&mut self, s: &'a str) -> usize {
+        if let Some(idx) = self
             .string_table
             .iter()
-            .find(|ref interned| **interned == &s)
+            .position(|ref interned| *interned == &s)
         {
-            ptr
+            idx
         } else {
+            let idx = self.string_table.len();
             self.string_table.push(s);
-            s
+            idx
         }
     }
 }
@@ -35,7 +36,7 @@ mod tests {
         let b = agent.intern_string("world");
         let c = agent.intern_string("hello");
 
-        assert_eq!(a.as_ptr(), c.as_ptr());
-        assert_ne!(b.as_ptr(), c.as_ptr());
+        assert_eq!(a, c);
+        assert_ne!(b, c);
     }
 }
