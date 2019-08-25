@@ -299,4 +299,64 @@ mod tests {
         assert_ne!(av, bv);
         assert_eq!(bv, dv);
     }
+
+    #[test]
+    fn test_int_equality() {
+        let a = Value::from(123123);
+        let b = Value::from(123123);
+        let c = Value::from(432432);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_double_equality() {
+        let a = Value::from(1.23);
+        let b = Value::from(1.23);
+        let c = Value::from(2.34);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_boolean_equality() {
+        let a = Value::from(true);
+        let b = Value::from(true);
+        let c = Value::from(false);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_null_equality() {
+        let a = Value::Null;
+        let b = Value::Null;
+        let c = Value::Boolean(false);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_string_equality() {
+        let a = Value::String("hello");
+        let b = Value::String("hello");
+        let c = Value::String("world");
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_array_equality() {
+        let a = Value::from(vec![Value::from(true), Value::Null, Value::String("abc")]);
+        let b = Value::from(vec![Value::from(true), Value::Null, Value::String("abc")]);
+        let c = Value::from(vec![Value::from(123)]);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
 }
