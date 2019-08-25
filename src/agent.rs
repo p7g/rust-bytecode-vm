@@ -1,11 +1,15 @@
+use crate::value::Upvalue;
+
 pub struct Agent<'a> {
     pub string_table: Vec<&'a str>,
+    pub upvalues: Vec<Upvalue<'a>>,
 }
 
 impl<'a> Agent<'a> {
     pub fn new() -> Agent<'a> {
         Agent {
             string_table: Vec::new(),
+            upvalues: Vec::new(),
         }
     }
 
