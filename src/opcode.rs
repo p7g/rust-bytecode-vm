@@ -9,6 +9,12 @@ pub enum OpCode {
     ConstTrue,
     ConstFalse,
     ConstNull,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Exp,
 }
 
 impl Into<u8> for OpCode {
@@ -29,6 +35,12 @@ impl std::convert::TryFrom<u8> for OpCode {
             4 => OpCode::ConstTrue,
             5 => OpCode::ConstFalse,
             6 => OpCode::ConstNull,
+            7 => OpCode::Add,
+            8 => OpCode::Sub,
+            9 => OpCode::Mul,
+            10 => OpCode::Div,
+            11 => OpCode::Mod,
+            12 => OpCode::Exp,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }
