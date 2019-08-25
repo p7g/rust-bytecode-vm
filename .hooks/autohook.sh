@@ -1,76 +1,21 @@
 #!/usr/bin/env bash
+# https://github.com/p7g/Autohook
 
-# Autohook
-# A very, very small Git hook manager with focus on automation
-# Website:  https://github.com/p7g/Autohook
+echo() { builtin echo "[Autohook] $*"; }
+echo_verbose() { if [ "$AUTOHOOK_VERBOSE" != '' ]; then echo "$@"; fi; }
+echo_error() { >&2 echo "[ERROR] $*"; }
+echo_debug() { if [ "$AUTOHOOK_DEBUG" != '' ]; then >&2 echo "[DEBUG] $*"; fi; }
 
-
-echo() {
-    builtin echo "[Autohook] $*"
-}
-
-echo_verbose() {
-    if [ "$AUTOHOOK_VERBOSE" != '' ]; then
-        echo "$@"
-    fi
-}
-
-echo_error() {
-    >&2 echo "[ERROR] $*"
-}
-
-printf() {
-    fmt=$1
-    shift
-    # shellcheck disable=SC2059
-    builtin printf "[Autohook] $fmt" "$@"
-}
-
-printf_error() {
-    fmt=$1
-    shift
-    # shellcheck disable=SC2059
-    >&2 printf "[ERROR] $fmt" "$@"
-}
-
-echo_debug() {
-    if [ "$AUTOHOOK_DEBUG" != '' ]; then
-        >&2 echo "[DEBUG] $*"
-    fi
-}
-
-
-repo_root() {
-    builtin echo "$(git rev-parse --show-toplevel)"
-}
-
-
-hooks_dir() {
-    builtin echo "$(repo_root)/.hooks"
-}
-
+repo_root() { git rev-parse --show-toplevel; }
+hooks_dir() { builtin echo "$(repo_root)/.hooks"; }
 
 hook_types=(
-    "applypatch-msg"
-    "commit-msg"
-    "post-applypatch"
-    "post-checkout"
-    "post-commit"
-    "post-merge"
-    "post-receive"
-    "post-rewrite"
-    "post-update"
-    "pre-applypatch"
-    "pre-auto-gc"
-    "pre-commit"
-    "pre-push"
-    "pre-rebase"
-    "pre-receive"
-    "prepare-commit-msg"
+    "applypatch-msg" "commit-msg" "post-applypatch" "post-checkout"
+    "post-commit" "post-merge" "post-receive" "post-rewrite"
+    "post-update" "pre-applypatch" "pre-auto-gc" "pre-commit"
+    "pre-push" "pre-rebase" "pre-receive" "prepare-commit-msg"
     "update"
 )
-
-
 
 install() {
     repo_root=$(repo_root)
@@ -90,7 +35,6 @@ install() {
     echo_debug '[install] done'
 }
 
-
 uninstall() {
     repo_root=$(repo_root)
     echo_debug "[uninstall] found repo_root '$repo_root'"
@@ -107,32 +51,22 @@ uninstall() {
     echo_debug '[uninstall] done'
 }
 
-
 link_script() {
-    script_name=$1
-    hook_type=$2
-    extension=$3
-
+    script_name=$1; hook_type=$2; extension=$3
     if [ "$script_name" == '' ] || [ "$hook_type" == '' ]; then
-        echo_error 'Expected script name, hook type, and extension args to link'
+        echo_error 'Expected script name and hook type args to link'
         return 1
     fi
-
-    script_dir="../scripts"
-    source_path="$script_dir/$script_name"
+    source_path="../scripts/$script_name"
     target_path="$(hooks_dir)/$hook_type"
     if [ "$extension" != '' ]; then
         target_path="$target_path/$extension"
         source_path="../$source_path"
     fi
-    target_path="$target_path/$script_name"
-
-    mkdir -p "$(dirname "$target_path")"
-
-    ln -s "$source_path" "$target_path"
+    mkdir -p "$target_path"
+    ln -s "$source_path" "$target_path/$script_name"
     return $?
 }
-
 
 run_symlinks() {
     if ! [ -d "$1" ]; then
@@ -142,19 +76,15 @@ run_symlinks() {
 
     autohook_fifo_dir=$(mktemp -d "${TMPDIR:-.}/autohook_fifo_XXXX") || {
         echo_error '[run_symlinks] failed to create temp fifo dir'
-        exit 1
+        return 1
     }
     autohook_stdout="$autohook_fifo_dir/stdout"
     autohook_stderr="$autohook_fifo_dir/stderr"
-    mkfifo "$autohook_stdout" || {
-        echo_error '[run_symlinks] failed to create temp stdout fifo'
-        exit 1
-    }
-    mkfifo "$autohook_stderr" || {
-        echo_error '[run_symlinks] failed to create temp stderr fifo'
-        exit 1
-    }
-
+    if ! mkfifo "$autohook_stdout" || ! mkfifo "$autohook_stderr"; then
+        echo_error '[run_symlinks] failed to create temp stderr or stdout fifo'
+        rm "$autohook_stdout" "$autohook_stderr"
+        return 1
+    fi
     tail -f "$autohook_stdout" > /dev/stdout &
     tail -f "$autohook_stderr" > /dev/stderr &
 
@@ -167,20 +97,16 @@ run_symlinks() {
     accumulator=$3
     number_of_symlinks="${#script_files[@]}"
     echo_debug "[run_symlinks] found $number_of_symlinks symlinks: '${script_files[*]}'"
-    if [ "$number_of_symlinks" -eq 1 ]; then
-        if [ "$(basename "${script_files[0]}")" == "*" ]; then
-            echo_debug '[run_symlinks] only script file was "*", setting number_of_symlinks to 0'
-            number_of_symlinks=0
-        fi
+    if [ "$number_of_symlinks" -eq 1 ] && [ "$(basename "${script_files[0]}")" == "*" ]; then
+        echo_debug '[run_symlinks] only script file was "*", setting number_of_symlinks to 0'
+        number_of_symlinks=0
     fi
     echo_verbose "Found $number_of_symlinks scripts"
-    scriptname=
     if [ "$number_of_symlinks" -gt 0 ]; then
         echo_debug '[run_symlinks] had symlinks, running scripts'
         hook_exit_code=0
         for file in "${script_files[@]}"; do
-            scriptname=$(basename "$file")
-            echo_verbose "BEGIN $scriptname"
+            echo_verbose "BEGIN $file"
             echo_debug "[run_symlinks] running '$file' with staged files '$accumulator'"
             result=$(
                 2>&1 \
@@ -195,12 +121,12 @@ run_symlinks() {
             if [ "$script_exit_code" != 0 ]; then
                 echo_debug "[run_symlinks] script exited with $script_exit_code"
                 hook_exit_code=$script_exit_code
+                echo_error "$hook_type script '$file' yielded negative exit code $hook_exit_code"
+                echo_error "Result:"
+                echo_error "$result"
+                builtin echo
             fi
-            if [ "$hook_exit_code" != 0 ]; then
-                echo_error "$hook_type script '$scriptname' yielded negative exit code $hook_exit_code"
-                printf_error "Result:\n%s\n" "$result"
-            fi
-            echo_verbose "FINISH $scriptname"
+            echo_verbose "FINISH $file"
         done
         rm -rf "$autohook_fifo_dir"
         if [ "$hook_exit_code" -ne 0 ]; then
@@ -209,21 +135,16 @@ run_symlinks() {
     fi
 }
 
-
 run_hook() {
     hook_type="$1"
-    shift
-    IFS=" " read -r -a file_types <<< "$@"
-
     if [ "$hook_type" = '' ]; then
         echo_error '[run-hook] Missing hook type argument'
         exit 1
     fi
+    shift
+    IFS=' ' read -r -a file_types <<< "$@"
 
-    echo_debug "[run-hook] got hook type '$hook_type'"
-    echo_debug "[run-hook] got file types '${file_types[*]}'"
-
-    echo_debug "[run-hook] number of filetypes: ${#file_types[@]}"
+    echo_debug "[run-hook] got hook type '$hook_type' and file types '${file_types[*]}'"
 
     if [ "${#file_types[@]}" -eq 0 ] || [ "${file_types[*]}" = '' ]; then
         echo_debug "[run-hook] no file types passed, running global $hook_type scripts"
@@ -235,7 +156,6 @@ run_hook() {
         done
     fi
 }
-
 
 usage() {
     cat <<USAGE
@@ -273,38 +193,19 @@ Variables:
 USAGE
 }
 
-
 main() {
     calling_file=$(basename "$0")
     echo_debug "called by '$calling_file'"
-
     if [ "$calling_file" == "autohook.sh" ]; then
-        while true; do
-            case "$1" in
-                '-vh' | '-hv')
-                    AUTOHOOK_VERBOSE=1
-                    usage "$@"
-                    exit 0
-                    ;;
-                '-h')
-                    echo_debug '[main] got -h option'
-                    usage "$@"
-                    exit 0
-                    ;;
-                '-v')
-                    echo_debug '[main] got -v option'
-                    AUTOHOOK_VERBOSE=1
-                    shift
-                    ;;
-                *)
-                    break
-                    ;;
-            esac
-        done
+        if [ "$1" = '-h' ]; then
+            usage "$@"
+            exit 0
+        elif [ "$1" = '-v' ]; then
+            AUTOHOOK_VERBOSE=1
+            shift
+        fi
 
-        command=$1
-        echo_debug "called by autohook.sh, command is '$command'"
-        case "$command" in
+        case "$1" in
             install)
                 echo_debug 'installing'
                 install
@@ -313,6 +214,7 @@ main() {
             uninstall)
                 echo_debug 'uninstalling'
                 uninstall
+                exit $?
                 ;;
             link-script)
                 echo_debug 'linking script'
@@ -332,20 +234,16 @@ main() {
                 exit 0
                 ;;
             *)
-                echo_error "Invalid command '$command'"
+                echo_error "Invalid command '$1'"
                 usage "$@"
                 exit 1
                 ;;
         esac
-        exit $?
     else
         repo_root=$(repo_root)
         hook_type=$calling_file
         symlinks_dir="$(hooks_dir)/$hook_type"
-
-        echo_debug "[main] found repo root '$repo_root'"
-        echo_debug "[main] hook type is '$hook_type'"
-        echo_debug "[main] found symlinks dir '$symlinks_dir'"
+        echo_debug "[main] repo root: '$repo_root', hook type: '$hook_type' symlinks dir: '$symlinks_dir'"
 
         echo_verbose "Running global $hook_type scripts"
         run_symlinks "$symlinks_dir" "$hook_type"
@@ -355,7 +253,6 @@ main() {
         echo_debug "[main] staged files: '$staged_files'"
         accumulator=()
         last_extension=
-
         if [ "$staged_files" != '' ]; then
             for staged_file in $staged_files ''; do # empty string allows us to run scripts for the last extension too
                 echo_debug "[main] staged file: '$staged_file'"
@@ -365,9 +262,8 @@ main() {
                     echo_debug '[main] current extension is different from last extension'
                     if [ "$last_extension" != '' ]; then # don't trigger on the first loop
                         echo_debug '[main] last extension is not empty, running scripts'
-                        script_file_dir=$symlinks_dir/$last_extension
                         echo_verbose "Running scripts for $hook_type with extension $last_extension"
-                        run_symlinks "$script_file_dir" "$hook_type" "$(IFS=$'\n'; builtin echo "${accumulator[*]}")"
+                        run_symlinks "$symlinks_dir/$last_extension" "$hook_type" "$(IFS=$'\n'; builtin echo "${accumulator[*]}")"
                         echo_verbose "Finished running scripts for $hook_type with extension $last_extension"
                     fi
                     if [ "$staged_file" == '' ]; then # end of staged files, break
@@ -385,6 +281,5 @@ main() {
         echo_debug '[main] finished'
     fi
 }
-
 
 main "$@"
