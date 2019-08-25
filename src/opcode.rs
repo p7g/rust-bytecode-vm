@@ -24,3 +24,11 @@ impl std::convert::TryFrom<u8> for OpCode {
         })
     }
 }
+
+impl std::convert::TryFrom<&u8> for OpCode {
+    type Error = String;
+
+    fn try_from(intval: &u8) -> Result<OpCode, Self::Error> {
+        OpCode::try_from(*intval)
+    }
+}
