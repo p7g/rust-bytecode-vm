@@ -121,6 +121,70 @@ impl<'a> Value<'a> {
     }
 }
 
+impl<'a> PartialEq for Value<'a> {
+    fn eq(&self, other: &Value<'a>) -> bool {
+        match self {
+            Value::Integer(a) => {
+                if let Value::Integer(b) = other {
+                    a == b
+                } else {
+                    false
+                }
+            }
+            Value::Double(a) => {
+                if let Value::Double(b) = other {
+                    a == b
+                } else {
+                    false
+                }
+            }
+            Value::Boolean(a) => {
+                if let Value::Boolean(b) = other {
+                    a == b
+                } else {
+                    false
+                }
+            }
+            Value::Null => {
+                if let Value::Null = other {
+                    true
+                } else {
+                    false
+                }
+            }
+            Value::String(a) => {
+                if let Value::String(b) = other {
+                    if a.len() != b.len() {
+                        false
+                    } else {
+                        a.chars().zip(b.chars()).all(|(a, b)| a == b)
+                    }
+                } else {
+                    false
+                }
+            }
+            Value::Array(a) => {
+                if let Value::Array(b) = other {
+                    if a.len() != b.len() {
+                        false
+                    } else {
+                        a.iter().zip(b.iter()).all(|(a, b)| a == b)
+                    }
+                } else {
+                    false
+                }
+            }
+            Value::Function(a) => {
+                if let Value::Function(b) = other {
+                    a == b // see trait PartialEq forFunctionValue
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
 impl<'a> From<i64> for Value<'a> {
     fn from(int: i64) -> Value<'a> {
         Value::Integer(int)
