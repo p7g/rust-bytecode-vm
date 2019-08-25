@@ -23,7 +23,7 @@ impl<'a> Module<'a> {
         self.exports.insert(id, value);
     }
 
-    pub fn get(&self, idx: &usize) -> Option<&Value<'a>> {
-        self.exports.get(idx)
+    pub fn get(&self, idx: usize) -> Option<&Value<'a>> {
+        self.exports.get(&idx)
     }
 }
