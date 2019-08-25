@@ -29,16 +29,23 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
         match OpCode::try_from(instruction)? {
             instruction @ OpCode::ConstInt => {
                 println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(8)));
-            },
+            }
 
             instruction @ OpCode::ConstDouble => {
-                println!("{:?}({:?})", instruction, f64::from_bits(u64::from_le_bytes(next!(8))));
-            },
+                println!(
+                    "{:?}({:?})",
+                    instruction,
+                    f64::from_bits(u64::from_le_bytes(next!(8)))
+                );
+            }
 
             instruction @ OpCode::ConstString => {
-                println!("{:?}({:?})", instruction,
-                    agent.string_table[usize::from_le_bytes(next!(8))]);
-            },
+                println!(
+                    "{:?}({:?})",
+                    instruction,
+                    agent.string_table[usize::from_le_bytes(next!(8))]
+                );
+            }
 
             instruction => println!("{:?}", instruction),
         }

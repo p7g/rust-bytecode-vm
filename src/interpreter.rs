@@ -21,8 +21,16 @@ impl<'a> Interpreter<'a> {
     pub fn evaluate(&mut self, code_object: CodeObject) -> Result<(), String> {
         let mut ip = 0;
 
-        macro_rules! push { ($expr:expr) => { self.stack.push($expr) } }
-        macro_rules! pop { () => { self.stack.pop().ok_or("Stack underflow")? } }
+        macro_rules! push {
+            ($expr:expr) => {
+                self.stack.push($expr)
+            };
+        }
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or("Stack underflow")?
+            };
+        }
         macro_rules! next {
             () => {{
                 let inst = code_object.instructions.get(ip);
@@ -33,8 +41,8 @@ impl<'a> Interpreter<'a> {
                 let mut array = [0u8; $expr];
 
                 for i in 0..$expr {
-                    let result: Result<&u8, String> = next!()
-                        .ok_or("Unexpected end of bytecode".into());
+                    let result: Result<&u8, String> =
+                        next!().ok_or("Unexpected end of bytecode".into());
                     let n: u8 = *result?;
                     array[i] = n;
                 }
@@ -45,34 +53,32 @@ impl<'a> Interpreter<'a> {
 
         while let Some(instruction) = next!() {
             match OpCode::try_from(instruction)? {
-                OpCode::Noop => {},
+                OpCode::Noop => {}
 
                 OpCode::ConstInt => {
                     push!(Value::from(i64::from_le_bytes(next!(8))));
-                },
+                }
 
                 OpCode::ConstDouble => {
-                    push!(Value::from(
-                        f64::from_bits(u64::from_le_bytes(next!(8))),
-                    ));
-                },
+                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(8))),));
+                }
 
                 OpCode::ConstNull => {
                     push!(Value::Null);
-                },
+                }
 
                 OpCode::ConstTrue => {
                     push!(Value::from(true));
-                },
+                }
 
                 OpCode::ConstFalse => {
                     push!(Value::from(false));
-                },
+                }
 
                 OpCode::ConstString => {
                     let idx = usize::from_le_bytes(next!(8));
                     push!(Value::from(self.agent.string_table[idx]));
-                },
+                }
             }
         }
 

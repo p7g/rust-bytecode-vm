@@ -82,11 +82,12 @@ impl<'a> PartialEq for FunctionValue<'a> {
                     arity: other_arity,
                     code_object: other_code_object,
                     upvalues: other_upvalues,
-                } = other {
-                    name == other_name &&
-                        arity == other_arity &&
-                        code_object == other_code_object &&
-                        upvalues == other_upvalues
+                } = other
+                {
+                    name == other_name
+                        && arity == other_arity
+                        && code_object == other_code_object
+                        && upvalues == other_upvalues
                 } else {
                     false
                 }

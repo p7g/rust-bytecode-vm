@@ -5,8 +5,6 @@ pub struct CodeObject {
 
 impl CodeObject {
     pub fn new(instructions: Vec<u8>) -> CodeObject {
-        CodeObject {
-            instructions,
-        }
+        CodeObject { instructions }
     }
 }

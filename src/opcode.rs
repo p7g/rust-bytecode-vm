@@ -1,6 +1,7 @@
+// When adding to this enum, make sure to add to TryFrom<u8>
 #[derive(Debug)]
 #[repr(u8)]
-pub enum OpCode { // When adding to this enum, make sure to add to TryFrom<u8>
+pub enum OpCode {
     Noop = 0,
     ConstInt,
     ConstDouble,
@@ -28,9 +29,7 @@ impl std::convert::TryFrom<u8> for OpCode {
             4 => OpCode::ConstTrue,
             5 => OpCode::ConstFalse,
             6 => OpCode::ConstNull,
-            _ => {
-                return Err(format!("{} is out of bounds for OpCode", intval))
-            },
+            _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }
 }
