@@ -1,8 +1,13 @@
 #[derive(Debug)]
 #[repr(u8)]
 pub enum OpCode {
-    Noop,
+    Noop = 0,
     ConstInt,
+    ConstDouble,
+    ConstString,
+    ConstTrue,
+    ConstFalse,
+    ConstNull,
 }
 
 impl Into<u8> for OpCode {
@@ -18,6 +23,11 @@ impl std::convert::TryFrom<u8> for OpCode {
         Ok(match intval {
             0 => OpCode::Noop,
             1 => OpCode::ConstInt,
+            2 => OpCode::ConstDouble,
+            3 => OpCode::ConstString,
+            4 => OpCode::ConstTrue,
+            5 => OpCode::ConstFalse,
+            6 => OpCode::ConstNull,
             _ => {
                 return Err(format!("{} is out of bounds for OpCode", intval))
             },

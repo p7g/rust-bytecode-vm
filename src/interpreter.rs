@@ -48,7 +48,30 @@ impl<'a> Interpreter<'a> {
                 OpCode::Noop => {},
 
                 OpCode::ConstInt => {
-                    println!("{}", i64::from_le_bytes(next!(8)));
+                    push!(Value::from(i64::from_le_bytes(next!(8))));
+                },
+
+                OpCode::ConstDouble => {
+                    push!(Value::from(
+                        f64::from_bits(u64::from_le_bytes(next!(8))),
+                    ));
+                },
+
+                OpCode::ConstNull => {
+                    push!(Value::Null);
+                },
+
+                OpCode::ConstTrue => {
+                    push!(Value::from(true));
+                },
+
+                OpCode::ConstFalse => {
+                    push!(Value::from(false));
+                },
+
+                OpCode::ConstString => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    push!(Value::from(self.agent.string_table[idx]));
                 },
             }
         }

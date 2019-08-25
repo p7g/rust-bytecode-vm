@@ -3,6 +3,7 @@ pub enum Value<'a> {
     Integer(i64),
     Double(f64),
     Boolean(bool),
+    Null,
     String(&'a str),
     Array(&'a [Value<'a>]),
 }
@@ -13,6 +14,7 @@ impl<'a> Value<'a> {
             Value::Integer(_) => "integer",
             Value::Double(_) => "double",
             Value::Boolean(_) => "boolean",
+            Value::Null => "null",
             Value::String(_) => "string",
             Value::Array(_) => "array",
         }
