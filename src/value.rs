@@ -96,14 +96,14 @@ impl<'a> PartialEq for FunctionValue<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value<'a> {
     Integer(i64),
     Double(f64),
     Boolean(bool),
     Null,
     String(&'a str),
-    Array(&'a [Value<'a>]),
+    Array(Box<[Value<'a>]>),
     Function(&'a FunctionValue<'a>),
 }
 
@@ -209,9 +209,9 @@ impl<'a> From<&'a str> for Value<'a> {
     }
 }
 
-impl<'a> From<&'a Vec<Value<'a>>> for Value<'a> {
-    fn from(vs: &'a Vec<Value<'a>>) -> Value<'a> {
-        Value::Array(vs.as_slice())
+impl<'a> From<Vec<Value<'a>>> for Value<'a> {
+    fn from(vs: Vec<Value<'a>>) -> Value<'a> {
+        Value::Array(vs.into_boxed_slice())
     }
 }
 
@@ -256,8 +256,8 @@ mod tests {
             Value::from("hwhwhwh"),
         ];
 
-        let v1 = Value::from(&vs);
-        let v2 = Value::Array(vs.as_slice());
+        let v1 = Value::from(vs.clone());
+        let v2 = Value::Array(vs.into_boxed_slice());
 
         assert_eq!(v1, v2);
     }
