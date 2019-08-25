@@ -3,6 +3,12 @@ use crate::interpreter::Interpreter;
 
 type BuiltinFunction<'a> = fn(&mut Interpreter, &'a [Value<'a>]) -> Value<'a>;
 
+#[derive(Debug, PartialEq)]
+pub enum Upvalue<'a> {
+    Open(&'a Value<'a>),
+    Closed(Value<'a>),
+}
+
 pub enum FunctionValue<'a> {
     Builtin {
         name: Option<usize>,
@@ -13,6 +19,7 @@ pub enum FunctionValue<'a> {
         name: Option<usize>,
         arity: usize,
         code_object: CodeObject,
+        upvalues: &'a [Upvalue<'a>],
     },
 }
 
@@ -32,6 +39,7 @@ impl<'a> std::fmt::Debug for FunctionValue<'a> {
                 name,
                 arity,
                 code_object,
+                ..
             } => write!(
                 f,
                 "FunctionValue::User(name: {:?}, arity: {:?}, code_object: {:?})",
@@ -67,15 +75,18 @@ impl<'a> PartialEq for FunctionValue<'a> {
                 name,
                 arity,
                 code_object,
+                upvalues,
             } => {
                 if let FunctionValue::User {
                     name: other_name,
                     arity: other_arity,
                     code_object: other_code_object,
+                    upvalues: other_upvalues,
                 } = other {
                     name == other_name &&
                         arity == other_arity &&
-                        code_object == other_code_object
+                        code_object == other_code_object &&
+                        upvalues == other_upvalues
                 } else {
                     false
                 }
@@ -201,6 +212,7 @@ mod tests {
             name: Some(123),
             arity: 1,
             code_object: CodeObject::new(Vec::new()),
+            upvalues: &[],
         };
         let c = FunctionValue::Builtin {
             name: Some(123),
@@ -211,6 +223,7 @@ mod tests {
             name: Some(123),
             arity: 1,
             code_object: CodeObject::new(Vec::new()),
+            upvalues: &[],
         };
 
         let av = Value::from(&a);
