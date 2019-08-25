@@ -148,6 +148,7 @@ impl<'a> From<&'a FunctionValue<'a>> for Value<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::{assert_eq, assert_ne};
 
     #[test]
     fn test_from_int() {
