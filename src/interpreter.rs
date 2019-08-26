@@ -118,6 +118,18 @@ impl<'a> Interpreter<'a> {
                 OpCode::Div => number_binop!("division", i64::div, f64::div),
                 OpCode::Mod => number_binop!("modulus", i64::rem, f64::rem),
                 OpCode::Exp => number_binop!("exponentiation", i64::pow, f64::powf, u32),
+
+                OpCode::Jump => {
+                    ip = usize::from_le_bytes(next!(8));
+                }
+
+                OpCode::JumpIfTrue => {
+                    let to = usize::from_le_bytes(next!(8));
+                    let cond = pop!();
+                    if cond.is_truthy() {
+                        ip = to;
+                    }
+                }
             }
         }
 
