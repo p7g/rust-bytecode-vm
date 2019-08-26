@@ -130,6 +130,14 @@ impl<'a> Interpreter<'a> {
                         ip = to;
                     }
                 }
+
+                OpCode::JumpIfFalse => {
+                    let to = usize::from_le_bytes(next!(8));
+                    let cond = pop!();
+                    if !cond.is_truthy() {
+                        ip = to;
+                    }
+                }
             }
         }
 

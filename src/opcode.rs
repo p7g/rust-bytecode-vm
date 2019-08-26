@@ -17,6 +17,7 @@ pub enum OpCode {
     Exp,
     Jump,
     JumpIfTrue,
+    JumpIfFalse,
 }
 
 impl Into<u8> for OpCode {
@@ -45,6 +46,7 @@ impl std::convert::TryFrom<u8> for OpCode {
             12 => OpCode::Exp,
             13 => OpCode::Jump,
             14 => OpCode::JumpIfTrue,
+            15 => OpCode::JumpIfFalse,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }
