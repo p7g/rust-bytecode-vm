@@ -118,6 +118,18 @@ impl<'a> Value<'a> {
             Value::Function(_) => "function",
         }
     }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Value::Integer(n) => *n != 0,
+            Value::Double(n) => *n != 0f64,
+            Value::Boolean(b) => *b,
+            Value::String(s) => s.len() != 0,
+            Value::Array(vs) => vs.len() != 0,
+            Value::Function(_) => true,
+            Value::Null => false,
+        }
+    }
 }
 
 impl<'a> PartialEq for Value<'a> {
