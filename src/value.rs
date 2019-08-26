@@ -370,4 +370,65 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
+
+    #[test]
+    fn test_integer_truthiness() {
+        let a = Value::from(1);
+        let b = Value::from(0);
+
+        assert!(a.is_truthy());
+        assert!(!b.is_truthy());
+    }
+
+    #[test]
+    fn test_double_truthiness() {
+        let a = Value::from(1.1);
+        let b = Value::from(0f64);
+
+        assert!(a.is_truthy());
+        assert!(!b.is_truthy());
+    }
+
+    #[test]
+    fn test_boolean_truthiness() {
+        let a = Value::from(true);
+        let b = Value::from(false);
+
+        assert!(a.is_truthy());
+        assert!(!b.is_truthy());
+    }
+
+    #[test]
+    fn test_null_truthiness() {
+        assert!(!Value::Null.is_truthy());
+    }
+
+    #[test]
+    fn test_string_truthiness() {
+        let a = Value::from("hello");
+        let b = Value::from("");
+
+        assert!(a.is_truthy());
+        assert!(!b.is_truthy());
+    }
+
+    #[test]
+    fn test_array_truthiness() {
+        let a = Value::from(vec![Value::Null]);
+        let b = Value::from(Vec::new());
+
+        assert!(a.is_truthy());
+        assert!(!b.is_truthy());
+    }
+
+    #[test]
+    fn test_function_truthiness() {
+        let a = Value::from(&FunctionValue::Builtin {
+            name: Some(123),
+            arity: 3,
+            function: builtin_function,
+        });
+
+        assert!(a.is_truthy());
+    }
 }
