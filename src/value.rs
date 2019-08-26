@@ -3,9 +3,54 @@ use crate::interpreter::Interpreter;
 type BuiltinFunction<'a> = fn(&mut Interpreter, &'a [Value<'a>]) -> Value<'a>;
 
 #[derive(Debug, PartialEq)]
-pub enum Upvalue<'a> {
-    Open(&'a Value<'a>),
+enum UpvalueValue<'a> {
+    Open(usize), // index of stack
     Closed(Value<'a>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Upvalue<'a> {
+    value: UpvalueValue<'a>,
+}
+
+impl<'a> Upvalue<'a> {
+    pub fn new(value: usize) -> Upvalue<'a> {
+        Upvalue {
+            value: UpvalueValue::Open(value),
+        }
+    }
+
+    pub fn close(&mut self, value: Value<'a>) {
+        if let UpvalueValue::Open(_) = &self.value {
+            self.value = UpvalueValue::Closed(value);
+        } else {
+            panic!("Closing closed upvalue");
+        }
+    }
+
+    pub fn get(&self) -> Value<'a> {
+        if let UpvalueValue::Closed(value) = &self.value {
+            value.clone()
+        } else {
+            panic!("Getting value of open upvalue");
+        }
+    }
+
+    pub fn set(&mut self, value: Value<'a>) {
+        if let UpvalueValue::Closed(_) = &self.value {
+            self.value = UpvalueValue::Closed(value); // FIXME: make sure this doesn't leak
+        } else {
+            panic!("Setting value of open upvalue");
+        }
+    }
+
+    pub fn stack_index(&self) -> usize {
+        if let UpvalueValue::Open(index) = self.value {
+            index
+        } else {
+            panic!("Getting index of closed upvalue");
+        }
+    }
 }
 
 pub enum FunctionValue<'a> {
