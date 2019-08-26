@@ -169,8 +169,8 @@ impl<'a> Value<'a> {
             Value::Integer(n) => *n != 0,
             Value::Double(n) => *n != 0f64,
             Value::Boolean(b) => *b,
-            Value::String(s) => s.len() != 0,
-            Value::Array(vs) => vs.len() != 0,
+            Value::String(s) => !s.is_empty(),
+            Value::Array(vs) => !vs.is_empty(),
             Value::Function(_) => true,
             Value::Null => false,
         }
