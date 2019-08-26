@@ -1,4 +1,3 @@
-use crate::code_object::CodeObject;
 use crate::interpreter::Interpreter;
 
 type BuiltinFunction<'a> = fn(&mut Interpreter, &'a [Value<'a>]) -> Value<'a>;
@@ -18,7 +17,7 @@ pub enum FunctionValue<'a> {
     User {
         name: Option<usize>,
         arity: usize,
-        code_object: CodeObject,
+        address: usize,
         upvalues: &'a [Upvalue<'a>],
     },
 }
@@ -38,12 +37,12 @@ impl<'a> std::fmt::Debug for FunctionValue<'a> {
             FunctionValue::User {
                 name,
                 arity,
-                code_object,
+                address,
                 ..
             } => write!(
                 f,
-                "FunctionValue::User(name: {:?}, arity: {:?}, code_object: {:?})",
-                name, arity, code_object,
+                "FunctionValue::User(name: {:?}, arity: {:?}, address: {:?})",
+                name, arity, address,
             ),
         }
     }
@@ -74,19 +73,19 @@ impl<'a> PartialEq for FunctionValue<'a> {
             FunctionValue::User {
                 name,
                 arity,
-                code_object,
+                address,
                 upvalues,
             } => {
                 if let FunctionValue::User {
                     name: other_name,
                     arity: other_arity,
-                    code_object: other_code_object,
+                    address: other_address,
                     upvalues: other_upvalues,
                 } = other
                 {
                     name == other_name
                         && arity == other_arity
-                        && code_object == other_code_object
+                        && address == other_address
                         && upvalues == other_upvalues
                 } else {
                     false
@@ -276,13 +275,13 @@ mod tests {
         let b = FunctionValue::User {
             name: Some(123),
             arity: 1,
-            code_object: CodeObject::new(Vec::new()),
+            address: 123,
             upvalues: &[],
         };
         let d = FunctionValue::User {
             name: Some(123),
             arity: 1,
-            code_object: CodeObject::new(Vec::new()),
+            address: 123,
             upvalues: &[],
         };
 
