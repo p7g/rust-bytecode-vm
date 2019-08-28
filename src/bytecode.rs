@@ -98,3 +98,120 @@ impl Bytecode {
         self.0.into()
     }
 }
+
+macro_rules! bytecode {
+    (($builder:expr) add $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.add())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) sub $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.sub())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) mul $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.mul())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) div $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.div())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) exp $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.exp())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) mod $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.rem())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_int $expr:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_int($expr))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_double $expr:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_double($expr))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_string ($agent:tt) $str:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_string($agent.intern_string($str)))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_string $expr:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_string($expr))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_null $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_null())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_true $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_true())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) const_false $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.const_false())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) halt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.halt())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) jump $dest:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.jump($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) jump_if_false $dest:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.jump_if_false($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) jump_if_true $dest:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.jump_if_true($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) $bad_thing:tt) => {{
+        compile_error!(stringify!(Unexpected: $bad_thing))
+    }};
+    (($builder:expr)) => {{
+        $builder
+    }};
+    ($($tt:tt)*) => {{
+        bytecode! {
+            (Bytecode::new())
+            $($tt)*
+        }
+    }};
+}

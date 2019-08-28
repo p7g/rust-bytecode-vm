@@ -236,12 +236,13 @@ mod tests {
     #[test]
     fn test_const_string() {
         let mut agent = Agent::new();
-        let id = agent.intern_string("hello world");
+
+        let bytecode = bytecode! {
+            const_string (agent) "hello world"
+        };
+
         let mut interpreter = Interpreter::new(&mut agent);
-
-        let bytecode = Bytecode::new().const_string(id).into();
-
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
 
         let result = interpreter.evaluate(code);
         assert_eq!(result, Ok(Value::from("hello world")));
@@ -252,13 +253,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(123)
-            .const_double(1.23)
-            .add()
-            .into();
+        let bytecode = bytecode! {
+            const_int 123
+            const_double 1.23
+            add
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(124.23)));
@@ -269,13 +270,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(123)
-            .const_double(1.23)
-            .sub()
-            .into();
+        let bytecode = bytecode! {
+            const_int 123
+            const_double 1.23
+            sub
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(121.77)));
@@ -286,13 +287,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(123)
-            .const_double(2.0)
-            .mul()
-            .into();
+        let bytecode = bytecode! {
+            const_int 123
+            const_double 2.0
+            mul
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(246f64)));
@@ -303,13 +304,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(124)
-            .const_double(2.0)
-            .div()
-            .into();
+        let bytecode = bytecode! {
+            const_int 124
+            const_double 2.0
+            div
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(62f64)));
@@ -320,13 +321,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(124)
-            .const_double(2.0)
-            .rem()
-            .into();
+        let bytecode = bytecode! {
+            const_int 124
+            const_double 2.0
+            mod
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(0f64)));
@@ -337,9 +338,13 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new().const_int(4).const_int(2).exp().into();
+        let bytecode = bytecode! {
+            const_int 4
+            const_int 2
+            exp
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(16)));
@@ -350,18 +355,18 @@ mod tests {
         let mut agent = Agent::new();
         let mut interpreter = Interpreter::new(&mut agent);
 
-        let bytecode = Bytecode::new()
-            .const_int(4)
-            .jump(29)
-            .const_int(8)
-            .add()
-            .halt()
-            .const_int(12)
-            .mul()
-            .halt()
-            .into();
+        let bytecode = bytecode! {
+            const_int 4
+            jump 29
+            const_int 8
+            add
+            halt
+            const_int 12
+            mul
+            halt
+        };
 
-        let code = CodeObject::new(bytecode);
+        let code = CodeObject::new(bytecode.into());
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(48)));

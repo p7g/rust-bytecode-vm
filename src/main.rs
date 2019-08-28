@@ -1,4 +1,5 @@
 mod agent;
+#[macro_use]
 mod bytecode;
 mod code_object;
 mod disassemble;
