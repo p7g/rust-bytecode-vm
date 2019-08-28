@@ -2,7 +2,7 @@
 #[derive(Debug)]
 #[repr(u8)]
 pub enum OpCode {
-    Noop = 0,
+    Halt = 0,
     ConstInt,
     ConstDouble,
     ConstString,
@@ -31,7 +31,7 @@ impl std::convert::TryFrom<u8> for OpCode {
 
     fn try_from(intval: u8) -> Result<OpCode, Self::Error> {
         Ok(match intval {
-            0 => OpCode::Noop,
+            0 => OpCode::Halt,
             1 => OpCode::ConstInt,
             2 => OpCode::ConstDouble,
             3 => OpCode::ConstString,

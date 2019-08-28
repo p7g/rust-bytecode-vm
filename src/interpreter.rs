@@ -85,7 +85,7 @@ impl<'a> Interpreter<'a> {
 
         while let Some(instruction) = next!() {
             match OpCode::try_from(instruction)? {
-                OpCode::Noop => {}
+                OpCode::Halt => break,
 
                 OpCode::ConstInt => {
                     push!(Value::from(i64::from_le_bytes(next!(8))));
