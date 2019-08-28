@@ -54,16 +54,17 @@ impl<'a> Interpreter<'a> {
 
         macro_rules! number_binop {
             ($name:expr, $intop:expr, $doubleop:expr) => {
-                number_binop!($name, $intop, $doubleop, i64)
+                number_binop!($name, $intop, $doubleop, |a: i64| -> Result<i64, String> {
+                    Ok(a)
+                })
             };
-            ($name:expr, $intop:expr, $doubleop:expr, $btype:ty) => {{
+            ($name:expr, $intop:expr, $doubleop:expr, $bconvert:expr) => {{
                 let b = pop!();
                 let a = pop!();
 
                 push!(if let Value::Integer(a) = a {
                     if let Value::Integer(b) = b {
-                        let b: $btype = b.try_into().map_err(|_| "Integer overflow".to_string())?;
-                        Value::from($intop(a, b))
+                        Value::from($intop(a, ($bconvert)(b)?))
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a as f64, b))
                     } else {
@@ -117,7 +118,14 @@ impl<'a> Interpreter<'a> {
                 OpCode::Mul => number_binop!("multiplication", i64::mul, f64::mul),
                 OpCode::Div => number_binop!("division", i64::div, f64::div),
                 OpCode::Mod => number_binop!("modulus", i64::rem, f64::rem),
-                OpCode::Exp => number_binop!("exponentiation", i64::pow, f64::powf, u32),
+                OpCode::Exp => number_binop!(
+                    "exponentiation",
+                    i64::pow,
+                    f64::powf,
+                    |b: i64| -> Result<u32, String> {
+                        b.try_into().map_err(|_| "Integer overflow".to_string())
+                    }
+                ),
 
                 OpCode::Jump => {
                     ip = usize::from_le_bytes(next!(8));
