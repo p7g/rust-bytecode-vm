@@ -1,4 +1,5 @@
 mod agent;
+mod bytecode;
 mod code_object;
 mod disassemble;
 mod interpreter;
