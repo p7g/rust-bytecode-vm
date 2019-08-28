@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::agent::Agent;
+use crate::bytecode::Bytecode;
 use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
 use crate::value::Value;
@@ -154,5 +155,215 @@ impl<'a> Interpreter<'a> {
         } else {
             Value::Null
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_halt() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().halt().const_true().into();
+
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        assert_eq!(result, Ok(Value::Null));
+    }
+
+    #[test]
+    fn test_const_int() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_int(123).into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(123)));
+    }
+
+    #[test]
+    fn test_const_double() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_double(1.23).into();
+
+        let code = CodeObject::new(bytecode);
+
+        let result = interpreter.evaluate(code);
+        assert_eq!(result, Ok(Value::from(1.23)));
+    }
+
+    #[test]
+    fn test_const_true() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_true().into();
+
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        assert_eq!(result, Ok(Value::from(true)));
+    }
+
+    #[test]
+    fn test_const_false() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_false().into();
+
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        assert_eq!(result, Ok(Value::from(false)));
+    }
+
+    #[test]
+    fn test_const_null() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_null().into();
+
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        assert_eq!(result, Ok(Value::Null));
+    }
+
+    #[test]
+    fn test_const_string() {
+        let mut agent = Agent::new();
+        let id = agent.intern_string("hello world");
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_string(id).into();
+
+        let code = CodeObject::new(bytecode);
+
+        let result = interpreter.evaluate(code);
+        assert_eq!(result, Ok(Value::from("hello world")));
+    }
+
+    #[test]
+    fn test_add() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(123)
+            .const_double(1.23)
+            .add()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(124.23)));
+    }
+
+    #[test]
+    fn test_sub() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(123)
+            .const_double(1.23)
+            .sub()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(121.77)));
+    }
+
+    #[test]
+    fn test_mul() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(123)
+            .const_double(2.0)
+            .mul()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(246f64)));
+    }
+
+    #[test]
+    fn test_div() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(124)
+            .const_double(2.0)
+            .div()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(62f64)));
+    }
+
+    #[test]
+    fn test_mod() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(124)
+            .const_double(2.0)
+            .rem()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(0f64)));
+    }
+
+    #[test]
+    fn test_exp() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new().const_int(4).const_int(2).exp().into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(16)));
+    }
+
+    #[test]
+    fn test_jump() {
+        let mut agent = Agent::new();
+        let mut interpreter = Interpreter::new(&mut agent);
+
+        let bytecode = Bytecode::new()
+            .const_int(4)
+            .jump(29)
+            .const_int(8)
+            .add()
+            .halt()
+            .const_int(12)
+            .mul()
+            .halt()
+            .into();
+
+        let code = CodeObject::new(bytecode);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(48)));
     }
 }
