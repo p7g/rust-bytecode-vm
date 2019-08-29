@@ -247,7 +247,7 @@ mod tests {
 
         let bytecode = Bytecode::new().halt().const_true().into();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -259,7 +259,7 @@ mod tests {
         let bytecode = Bytecode::new().const_int(123).into();
 
         let code = CodeObject::new(bytecode);
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -273,7 +273,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode);
 
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
         assert_eq!(result, Ok(Value::from(1.23)));
     }
 
@@ -284,7 +284,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_true().into();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::from(true)));
     }
 
@@ -295,7 +295,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_false().into();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::from(false)));
     }
 
@@ -306,7 +306,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_null().into();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode));
+        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -321,7 +321,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let code = CodeObject::new(bytecode.into());
 
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
         assert_eq!(result, Ok(Value::from("hello world")));
     }
 
@@ -337,7 +337,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(124.23)));
     }
@@ -354,7 +354,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(121.77)));
     }
@@ -371,7 +371,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(246f64)));
     }
@@ -388,7 +388,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(62f64)));
     }
@@ -405,7 +405,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(0f64)));
     }
@@ -422,7 +422,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(16)));
     }
@@ -444,7 +444,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(48)));
     }
@@ -471,7 +471,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(357)));
     }
@@ -497,7 +497,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(20)));
     }

@@ -374,15 +374,15 @@ mod tests {
             upvalues: &[],
         };
 
-        let av = Value::from(a);
-        let bv = Value::from(b);
-        let dv = Value::from(d);
-
         assert_ne!(a, b);
         // might not be equal, function pointers can be different even when they point
         // to the same function
         // assert_eq!(a, c);
         assert_eq!(b, d);
+
+        let av = Value::from(a);
+        let bv = Value::from(b);
+        let dv = Value::from(d);
 
         assert_ne!(av, bv);
         assert_eq!(bv, dv);
