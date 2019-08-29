@@ -26,6 +26,7 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
     }
 
     while let Some(instruction) = next!() {
+        print!("{}: ", ip - 1);
         match OpCode::try_from(instruction)? {
             instruction @ OpCode::ConstInt => {
                 println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(8)));
@@ -35,19 +36,34 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
                 println!(
                     "{:?}({:?})",
                     instruction,
-                    f64::from_bits(u64::from_le_bytes(next!(8)))
+                    f64::from_bits(u64::from_le_bytes(next!(8))),
                 );
+            }
+
+            instruction @ OpCode::Jump
+            | instruction @ OpCode::JumpIfTrue
+            | instruction @ OpCode::JumpIfFalse => {
+                println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)),);
             }
 
             instruction @ OpCode::ConstString => {
                 println!(
                     "{:?}({:?})",
                     instruction,
-                    agent.string_table[usize::from_le_bytes(next!(8))]
+                    agent.string_table[usize::from_le_bytes(next!(8))],
                 );
             }
 
-            instruction => println!("{:?}", instruction),
+            instruction @ OpCode::Halt
+            | instruction @ OpCode::ConstTrue
+            | instruction @ OpCode::ConstFalse
+            | instruction @ OpCode::ConstNull
+            | instruction @ OpCode::Add
+            | instruction @ OpCode::Sub
+            | instruction @ OpCode::Mul
+            | instruction @ OpCode::Div
+            | instruction @ OpCode::Mod
+            | instruction @ OpCode::Exp => println!("{:?}", instruction),
         }
     }
 
