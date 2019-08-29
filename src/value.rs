@@ -1,6 +1,6 @@
 use crate::interpreter::Interpreter;
 
-type BuiltinFunction<'a> = fn(&mut Interpreter, &'a [Value<'a>]) -> Value<'a>;
+type BuiltinFunction<'a> = fn(&mut Interpreter, Vec<Value<'a>>) -> Value<'a>;
 
 #[derive(Debug, PartialEq)]
 enum UpvalueValue<'a> {
@@ -53,6 +53,7 @@ impl<'a> Upvalue<'a> {
     }
 }
 
+#[derive(Clone)]
 pub enum FunctionValue<'a> {
     Builtin {
         name: Option<usize>,
@@ -146,9 +147,9 @@ pub enum Value<'a> {
     Double(f64),
     Boolean(bool),
     Null,
-    String(&'a str),
+    String(String),
     Array(Box<[Value<'a>]>),
-    Function(&'a FunctionValue<'a>),
+    Function(FunctionValue<'a>),
 }
 
 impl<'a> Value<'a> {
@@ -180,7 +181,7 @@ impl<'a> Value<'a> {
 impl<'a> std::fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Value::String(s) => write!(f, "{:?}", s),
+            Value::String(s) => write!(f, "{}", s),
             Value::Integer(n) => write!(f, "{}", n),
             Value::Double(n) => write!(f, "{}", n),
             Value::Boolean(b) => write!(f, "{}", b),
@@ -281,6 +282,12 @@ impl<'a> From<bool> for Value<'a> {
 
 impl<'a> From<&'a str> for Value<'a> {
     fn from(s: &'a str) -> Value<'a> {
+        Value::String(s.to_string())
+    }
+}
+
+impl<'a> From<String> for Value<'a> {
+    fn from(s: String) -> Value<'a> {
         Value::String(s)
     }
 }
@@ -291,8 +298,8 @@ impl<'a> From<Vec<Value<'a>>> for Value<'a> {
     }
 }
 
-impl<'a> From<&'a FunctionValue<'a>> for Value<'a> {
-    fn from(f: &'a FunctionValue<'a>) -> Value<'a> {
+impl<'a> From<FunctionValue<'a>> for Value<'a> {
+    fn from(f: FunctionValue<'a>) -> Value<'a> {
         Value::Function(f)
     }
 }
@@ -320,7 +327,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let s = "hello world";
-        assert_eq!(Value::from(s), Value::String(s));
+        assert_eq!(Value::from(s), Value::String(s.to_string()));
     }
 
     #[test]
@@ -332,13 +339,18 @@ mod tests {
             Value::from("hwhwhwh"),
         ];
 
-        let v1 = Value::from(vs.clone());
+        let v1 = Value::from(vec![
+            Value::from(123),
+            Value::from(true),
+            Value::from(3.21),
+            Value::from("hwhwhwh"),
+        ]);
         let v2 = Value::Array(vs.into_boxed_slice());
 
         assert_eq!(v1, v2);
     }
 
-    fn builtin_function<'a>(_: &mut Interpreter, _: &'a [Value<'a>]) -> Value<'a> {
+    fn builtin_function<'a>(_: &mut Interpreter, _: Vec<Value<'a>>) -> Value<'a> {
         Value::Null
     }
 
@@ -362,9 +374,9 @@ mod tests {
             upvalues: &[],
         };
 
-        let av = Value::from(&a);
-        let bv = Value::from(&b);
-        let dv = Value::from(&d);
+        let av = Value::from(a);
+        let bv = Value::from(b);
+        let dv = Value::from(d);
 
         assert_ne!(a, b);
         // might not be equal, function pointers can be different even when they point
@@ -418,9 +430,9 @@ mod tests {
 
     #[test]
     fn test_string_equality() {
-        let a = Value::String("hello");
-        let b = Value::String("hello");
-        let c = Value::String("world");
+        let a = Value::from("hello");
+        let b = Value::from("hello");
+        let c = Value::from("world");
 
         assert_eq!(a, b);
         assert_ne!(a, c);
@@ -428,8 +440,8 @@ mod tests {
 
     #[test]
     fn test_array_equality() {
-        let a = Value::from(vec![Value::from(true), Value::Null, Value::String("abc")]);
-        let b = Value::from(vec![Value::from(true), Value::Null, Value::String("abc")]);
+        let a = Value::from(vec![Value::from(true), Value::Null, Value::from("abc")]);
+        let b = Value::from(vec![Value::from(true), Value::Null, Value::from("abc")]);
         let c = Value::from(vec![Value::from(123)]);
 
         assert_eq!(a, b);
@@ -488,7 +500,7 @@ mod tests {
 
     #[test]
     fn test_function_truthiness() {
-        let a = Value::from(&FunctionValue::Builtin {
+        let a = Value::from(FunctionValue::Builtin {
             name: Some(123),
             arity: 3,
             function: builtin_function,
