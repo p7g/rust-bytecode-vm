@@ -7,6 +7,19 @@ use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
 use crate::value::Value;
 
+macro_rules! print_stack {
+    ($stack:expr) => {{
+        print!("[");
+        for (i, v) in $stack.iter().enumerate() {
+            print!("{}", v);
+            if i < $stack.len() - 1 {
+                print!(", ");
+            }
+        }
+        println!("]");
+    }};
+}
+
 pub struct Interpreter<'a> {
     agent: &'a mut Agent<'a>,
     stack: Vec<Value<'a>>,
@@ -86,6 +99,13 @@ impl<'a> Interpreter<'a> {
         }
 
         while let Some(instruction) = next!() {
+            if cfg!(vm_debug) {
+                println!("--------------");
+                print_stack!(&self.stack);
+                println!("{:?}", OpCode::try_from(instruction)?);
+                println!("ip: {}", ip);
+            }
+
             match OpCode::try_from(instruction)? {
                 OpCode::Halt => break,
 
