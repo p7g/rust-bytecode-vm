@@ -177,6 +177,26 @@ impl<'a> Value<'a> {
     }
 }
 
+impl<'a> std::fmt::Display for Value<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Value::String(s) => write!(f, "{:?}", s),
+            Value::Integer(n) => write!(f, "{}", n),
+            Value::Double(n) => write!(f, "{}", n),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Null => write!(f, "null"),
+            Value::Array(vs) => {
+                write!(f, "[")?;
+                for val in vs.iter() {
+                    write!(f, "{}", val)?;
+                }
+                write!(f, "]")
+            }
+            Value::Function(func) => write!(f, "{:?}", func),
+        }
+    }
+}
+
 impl<'a> PartialEq for Value<'a> {
     fn eq(&self, other: &Value<'a>) -> bool {
         match self {
