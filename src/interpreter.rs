@@ -11,7 +11,7 @@ macro_rules! print_stack {
     ($stack:expr) => {{
         print!("[");
         for (i, v) in $stack.iter().enumerate() {
-            print!("{}", v);
+            print!("{:?}", v);
             if i < $stack.len() - 1 {
                 print!(", ");
             }
