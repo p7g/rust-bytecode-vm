@@ -135,6 +135,10 @@ impl Bytecode {
         self.op(OpCode::JumpIfFalse).usize(ip)
     }
 
+    pub fn call(self, num_args: usize) -> Bytecode {
+        self.op(OpCode::Call).usize(num_args)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -261,6 +265,12 @@ macro_rules! bytecode {
     (($builder:expr) jump_if_true $dest:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.jump_if_true($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) call $num_args:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.call($num_args))
             $($tt)*
         }
     }};

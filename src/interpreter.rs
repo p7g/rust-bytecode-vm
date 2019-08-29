@@ -5,7 +5,7 @@ use crate::agent::Agent;
 use crate::bytecode::Bytecode;
 use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
-use crate::value::Value;
+use crate::value::{FunctionValue, Value};
 
 macro_rules! print_stack {
     ($stack:expr) => {{
@@ -166,6 +166,58 @@ impl<'a> Interpreter<'a> {
                     if !cond.is_truthy() {
                         ip = to;
                     }
+                }
+
+                OpCode::Call => {
+                    let function = pop!();
+                    let num_args = usize::from_le_bytes(next!(8));
+                    if let Value::Function(f) = function {
+                        macro_rules! ensure_arity {
+                            ($arity:expr, $name:expr) => {{
+                                if num_args < $arity {
+                                    let name = if let Some(name) = $name {
+                                        self.agent.string_table[name]
+                                    } else {
+                                        "<anonymous>"
+                                    };
+                                    return Err(format!(
+                                        "Function {} expected {} args, got {}",
+                                        name, $arity, num_args
+                                    ));
+                                }
+                            }};
+                        }
+                        match f {
+                            FunctionValue::Builtin {
+                                arity,
+                                function,
+                                name,
+                                ..
+                            } => {
+                                ensure_arity!(arity, name);
+                                let mut args = Vec::new();
+                                for _ in 0..num_args {
+                                    args.push(pop!());
+                                }
+                                push!(function(self, args));
+                            }
+                            FunctionValue::User {
+                                arity,
+                                address,
+                                name,
+                                ..
+                            } => {
+                                ensure_arity!(arity, name);
+                                unimplemented!();
+                            }
+                        }
+                    } else {
+                        return Err(format!("Value {:?} is not callable", function));
+                    }
+                }
+
+                OpCode::Return => {
+                    unimplemented!();
                 }
             }
         }

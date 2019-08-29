@@ -42,7 +42,9 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
 
             instruction @ OpCode::Jump
             | instruction @ OpCode::JumpIfTrue
-            | instruction @ OpCode::JumpIfFalse => {
+            | instruction @ OpCode::JumpIfFalse
+            | instruction @ OpCode::Call
+            | instruction @ OpCode::Return => {
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)),);
             }
 
