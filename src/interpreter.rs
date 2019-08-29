@@ -391,4 +391,57 @@ mod tests {
 
         assert_eq!(result, Ok(Value::from(48)));
     }
+
+    #[test]
+    fn test_jump_if_true() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            const_int 123
+            const_int 234
+            const_int 1
+            jump_if_true one
+            mul
+            halt
+        one:
+            const_false
+            jump_if_true two
+            add
+            halt
+        two:
+            sub
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(357)));
+    }
+
+    #[test]
+    fn test_jump_if_false() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            const_true
+            jump_if_false one
+            const_int 10
+            const_int 2
+            const_string (agent) ""
+            jump_if_false two
+        one:
+            add
+            halt
+        two:
+            mul
+            halt
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(20)));
+    }
 }
