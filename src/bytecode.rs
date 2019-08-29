@@ -1,93 +1,137 @@
 use crate::opcode::OpCode;
+use std::collections::HashMap;
 
-pub struct Bytecode(Vec<u8>);
+pub struct Bytecode {
+    instructions: Vec<u8>,
+    label_addresses: HashMap<&'static str, usize>,
+    pending_addresses: HashMap<&'static str, Vec<usize>>,
+}
 
 impl Bytecode {
     pub fn new() -> Bytecode {
-        Bytecode(Vec::new())
+        Bytecode {
+            instructions: Vec::new(),
+            label_addresses: HashMap::new(),
+            pending_addresses: HashMap::new(),
+        }
+    }
+
+    pub fn label(mut self, name: &'static str) -> Bytecode {
+        let address = self.instructions.len();
+        self.label_addresses.insert(name, address);
+
+        if let Some(pending) = self.pending_addresses.get(name) {
+            for p in pending.iter() {
+                for (i, b) in address.to_le_bytes().iter().enumerate() {
+                    self.instructions[p + i] = *b;
+                }
+            }
+        }
+
+        self
+    }
+
+    pub fn address_of(mut self, name: &'static str) -> Bytecode {
+        if self.label_addresses.contains_key(name) {
+            let address = { self.label_addresses.get(name).unwrap().clone() };
+            self.usize(address)
+        } else {
+            let current_address = self.instructions.len();
+            if !self.pending_addresses.contains_key(name) {
+                self.pending_addresses.insert(name, vec![current_address]);
+            } else {
+                self.pending_addresses
+                    .get_mut(name)
+                    .unwrap()
+                    .push(current_address);
+            }
+
+            self.usize(0)
+        }
     }
 
     pub fn op(mut self, opcode: OpCode) -> Bytecode {
-        self.0.push(opcode.into());
+        self.instructions.push(opcode.into());
         self
     }
 
     pub fn i64(mut self, n: i64) -> Bytecode {
-        self.0.append(&mut n.to_le_bytes().to_vec());
+        self.instructions.append(&mut n.to_le_bytes().to_vec());
         self
     }
 
     pub fn f64(mut self, n: f64) -> Bytecode {
-        self.0.append(&mut n.to_bits().to_le_bytes().to_vec());
+        self.instructions
+            .append(&mut n.to_bits().to_le_bytes().to_vec());
         self
     }
 
     pub fn usize(mut self, n: usize) -> Bytecode {
-        self.0.append(&mut n.to_le_bytes().to_vec());
+        self.instructions.append(&mut n.to_le_bytes().to_vec());
         self
     }
 
-    pub fn halt(mut self) -> Bytecode {
+    pub fn halt(self) -> Bytecode {
         self.op(OpCode::Halt)
     }
 
-    pub fn const_int(mut self, n: i64) -> Bytecode {
+    pub fn const_int(self, n: i64) -> Bytecode {
         self.op(OpCode::ConstInt).i64(n)
     }
 
-    pub fn const_double(mut self, n: f64) -> Bytecode {
+    pub fn const_double(self, n: f64) -> Bytecode {
         self.op(OpCode::ConstDouble).f64(n)
     }
 
-    pub fn const_null(mut self) -> Bytecode {
+    pub fn const_null(self) -> Bytecode {
         self.op(OpCode::ConstNull)
     }
 
-    pub fn const_true(mut self) -> Bytecode {
+    pub fn const_true(self) -> Bytecode {
         self.op(OpCode::ConstTrue)
     }
 
-    pub fn const_false(mut self) -> Bytecode {
+    pub fn const_false(self) -> Bytecode {
         self.op(OpCode::ConstFalse)
     }
 
-    pub fn const_string(mut self, id: usize) -> Bytecode {
+    pub fn const_string(self, id: usize) -> Bytecode {
         self.op(OpCode::ConstString).usize(id)
     }
 
-    pub fn add(mut self) -> Bytecode {
+    pub fn add(self) -> Bytecode {
         self.op(OpCode::Add)
     }
 
-    pub fn sub(mut self) -> Bytecode {
+    pub fn sub(self) -> Bytecode {
         self.op(OpCode::Sub)
     }
 
-    pub fn mul(mut self) -> Bytecode {
+    pub fn mul(self) -> Bytecode {
         self.op(OpCode::Mul)
     }
 
-    pub fn div(mut self) -> Bytecode {
+    pub fn div(self) -> Bytecode {
         self.op(OpCode::Div)
     }
 
-    pub fn rem(mut self) -> Bytecode {
+    pub fn rem(self) -> Bytecode {
         self.op(OpCode::Mod)
     }
 
-    pub fn exp(mut self) -> Bytecode {
+    pub fn exp(self) -> Bytecode {
         self.op(OpCode::Exp)
     }
 
-    pub fn jump(mut self, ip: usize) -> Bytecode {
+    pub fn jump(self, ip: usize) -> Bytecode {
         self.op(OpCode::Jump).usize(ip)
     }
 
-    pub fn jump_if_true(mut self, ip: usize) -> Bytecode {
+    pub fn jump_if_true(self, ip: usize) -> Bytecode {
         self.op(OpCode::JumpIfTrue).usize(ip)
     }
 
-    pub fn jump_if_false(mut self, ip: usize) -> Bytecode {
+    pub fn jump_if_false(self, ip: usize) -> Bytecode {
         self.op(OpCode::JumpIfFalse).usize(ip)
     }
 
@@ -95,7 +139,7 @@ impl Bytecode {
     where
         T: std::convert::From<std::vec::Vec<u8>>,
     {
-        self.0.into()
+        self.instructions.into()
     }
 }
 
@@ -184,9 +228,21 @@ macro_rules! bytecode {
             $($tt)*
         }
     }};
+    (($builder:expr) jump $dest:ident $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.op(OpCode::Jump).address_of(stringify!($dest)))
+            $($tt)*
+        }
+    }};
     (($builder:expr) jump $dest:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.jump($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) jump_if_false $dest:ident $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.op(OpCode::JumpIfFalse).address_of(stringify!($dest)))
             $($tt)*
         }
     }};
@@ -196,9 +252,21 @@ macro_rules! bytecode {
             $($tt)*
         }
     }};
+    (($builder:expr) jump_if_true $dest:ident $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.op(OpCode::JumpIfTrue).address_of(stringify!($dest)))
+            $($tt)*
+        }
+    }};
     (($builder:expr) jump_if_true $dest:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.jump_if_true($dest))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) $label:ident : $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.label(stringify!($label)))
             $($tt)*
         }
     }};
