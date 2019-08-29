@@ -22,29 +22,34 @@ macro_rules! print_stack {
 
 pub struct Interpreter<'a> {
     agent: &'a mut Agent<'a>,
-    stack: Vec<Value<'a>>,
 }
 
 impl<'a> Interpreter<'a> {
     pub fn new(agent: &'a mut Agent<'a>) -> Interpreter<'a> {
-        Interpreter {
-            agent,
-            stack: Vec::new(),
-        }
+        Interpreter { agent }
     }
 
-    pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value<'a>, String> {
+    pub fn evaluate(
+        &mut self,
+        mut stack: Vec<Value<'a>>,
+        code_object: CodeObject,
+    ) -> Result<Value<'a>, String> {
+        let mut call_stack: Vec<usize> = Vec::new();
         let mut ip = 0;
+        let mut bp = 0;
+        let mut sp = 0;
 
         macro_rules! push {
-            ($expr:expr) => {
-                self.stack.push($expr)
-            };
+            ($expr:expr) => {{
+                sp += 1;
+                stack.push($expr)
+            }};
         }
         macro_rules! pop {
-            () => {
-                self.stack.pop().ok_or("Stack underflow")?
-            };
+            () => {{
+                sp -= 1;
+                stack.pop().ok_or("Stack underflow")?
+            }};
         }
         macro_rules! next {
             () => {{
@@ -101,7 +106,7 @@ impl<'a> Interpreter<'a> {
         while let Some(instruction) = next!() {
             if cfg!(vm_debug) {
                 println!("--------------");
-                print_stack!(&self.stack);
+                print_stack!(&stack);
                 println!("{:?}", OpCode::try_from(instruction)?);
                 println!("ip: {}", ip);
             }
@@ -222,7 +227,7 @@ impl<'a> Interpreter<'a> {
             }
         }
 
-        Ok(if let Some(value) = self.stack.pop() {
+        Ok(if let Some(value) = stack.pop() {
             value
         } else {
             Value::Null
