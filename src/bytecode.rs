@@ -143,6 +143,10 @@ impl Bytecode {
         self.op(OpCode::Return)
     }
 
+    pub fn pop(self) -> Bytecode {
+        self.op(OpCode::Pop)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -281,6 +285,12 @@ macro_rules! bytecode {
     (($builder:expr) return $($tt:tt)*) => {{
         bytecode! {
             ($builder.ret())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) pop $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.pop())
             $($tt)*
         }
     }};
