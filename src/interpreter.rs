@@ -219,7 +219,11 @@ impl<'a> Interpreter<'a> {
                                 ..
                             } => {
                                 ensure_arity!(arity, name);
-                                unimplemented!();
+                                call_stack.push(ip); // return address
+                                call_stack.push(num_args); // for cleanup
+                                call_stack.push(bp); // current base pointer
+                                bp = sp; // new base is at current stack index
+                                ip = address; // jump into function
                             }
                         }
                     } else {
@@ -228,7 +232,18 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::Return => {
-                    unimplemented!();
+                    let retval = pop!();
+                    bp = call_stack
+                        .pop()
+                        .ok_or("Missing bp on call_stack".to_string())?;
+                    let num_args = call_stack
+                        .pop()
+                        .ok_or("Missing num_args on call_stack".to_string())?;
+                    ip = call_stack
+                        .pop()
+                        .ok_or("Missing ip on call_stack".to_string())?;
+                    pop!(num_args);
+                    push!(retval);
                 }
             }
         }
@@ -506,5 +521,35 @@ mod tests {
         let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::from(20)));
+    }
+
+    #[test]
+    fn test_user_function() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+            const_int 123
+            return
+
+        main:
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        crate::disassemble::disassemble(&agent, &code).unwrap();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(
+            vec![Value::from(FunctionValue::User {
+                name: None,
+                address: 9,
+                arity: 0,
+                upvalues: Vec::new(),
+            })],
+            code,
+        );
+
+        assert_eq!(result, Ok(Value::from(123)));
     }
 }
