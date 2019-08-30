@@ -16,15 +16,15 @@ use disassemble::disassemble;
 use interpreter::Interpreter;
 use value::{FunctionValue, Value};
 
-fn to_string<'a>(_: &mut Interpreter, args: Vec<Value<'a>>) -> Value<'a> {
+fn to_string(_: &mut Interpreter, args: Vec<Value>) -> Value {
     Value::from(format!("{}", args[0]))
 }
 
-fn type_of<'a>(_: &mut Interpreter, args: Vec<Value<'a>>) -> Value<'a> {
+fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Value {
     Value::from(args[0].type_of())
 }
 
-fn print<'a>(_: &mut Interpreter, args: Vec<Value<'a>>) -> Value<'a> {
+fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
     let mut s = String::new();
 
     for (i, v) in args.iter().map(|v| format!("{}", v)).enumerate() {

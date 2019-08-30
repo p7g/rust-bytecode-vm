@@ -1,26 +1,27 @@
 use crate::interpreter::Interpreter;
+use std::rc::Rc;
 
-type BuiltinFunction<'a> = fn(&mut Interpreter, Vec<Value<'a>>) -> Value<'a>;
+type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Value;
 
 #[derive(Debug, PartialEq)]
-enum UpvalueValue<'a> {
+enum UpvalueValue {
     Open(usize), // index of stack
-    Closed(Value<'a>),
+    Closed(Value),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Upvalue<'a> {
-    value: UpvalueValue<'a>,
+pub struct Upvalue {
+    value: UpvalueValue,
 }
 
-impl<'a> Upvalue<'a> {
-    pub fn new(value: usize) -> Upvalue<'a> {
+impl Upvalue {
+    pub fn new(value: usize) -> Upvalue {
         Upvalue {
             value: UpvalueValue::Open(value),
         }
     }
 
-    pub fn close(&mut self, value: Value<'a>) {
+    pub fn close(&mut self, value: Value) {
         if let UpvalueValue::Open(_) = &self.value {
             self.value = UpvalueValue::Closed(value);
         } else {
@@ -28,7 +29,7 @@ impl<'a> Upvalue<'a> {
         }
     }
 
-    pub fn get(&self) -> Value<'a> {
+    pub fn get(&self) -> Value {
         if let UpvalueValue::Closed(value) = &self.value {
             value.clone()
         } else {
@@ -36,7 +37,7 @@ impl<'a> Upvalue<'a> {
         }
     }
 
-    pub fn set(&mut self, value: Value<'a>) {
+    pub fn set(&mut self, value: Value) {
         if let UpvalueValue::Closed(_) = &self.value {
             self.value = UpvalueValue::Closed(value); // FIXME: make sure this doesn't leak
         } else {
@@ -54,21 +55,21 @@ impl<'a> Upvalue<'a> {
 }
 
 #[derive(Clone)]
-pub enum FunctionValue<'a> {
+pub enum FunctionValue {
     Builtin {
         name: Option<usize>,
         arity: usize,
-        function: BuiltinFunction<'a>,
+        function: BuiltinFunction,
     },
     User {
         name: Option<usize>,
         arity: usize,
         address: usize,
-        upvalues: &'a [Upvalue<'a>],
+        upvalues: Vec<Rc<Upvalue>>,
     },
 }
 
-impl<'a> std::fmt::Debug for FunctionValue<'a> {
+impl std::fmt::Debug for FunctionValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionValue::Builtin {
@@ -94,8 +95,8 @@ impl<'a> std::fmt::Debug for FunctionValue<'a> {
     }
 }
 
-impl<'a> PartialEq for FunctionValue<'a> {
-    fn eq(&self, other: &FunctionValue<'a>) -> bool {
+impl PartialEq for FunctionValue {
+    fn eq(&self, other: &FunctionValue) -> bool {
         match self {
             FunctionValue::Builtin {
                 name,
@@ -142,17 +143,17 @@ impl<'a> PartialEq for FunctionValue<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Value<'a> {
+pub enum Value {
     Integer(i64),
     Double(f64),
     Boolean(bool),
     Null,
     String(String),
-    Array(Box<[Value<'a>]>),
-    Function(FunctionValue<'a>),
+    Array(Box<[Value]>),
+    Function(FunctionValue),
 }
 
-impl<'a> Value<'a> {
+impl Value {
     pub fn type_of(&self) -> &'static str {
         match self {
             Value::Integer(_) => "integer",
@@ -178,7 +179,7 @@ impl<'a> Value<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Value<'a> {
+impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Value::String(s) => write!(f, "{}", s),
@@ -198,8 +199,8 @@ impl<'a> std::fmt::Display for Value<'a> {
     }
 }
 
-impl<'a> PartialEq for Value<'a> {
-    fn eq(&self, other: &Value<'a>) -> bool {
+impl PartialEq for Value {
+    fn eq(&self, other: &Value) -> bool {
         match self {
             Value::Integer(a) => {
                 if let Value::Integer(b) = other {
@@ -262,44 +263,44 @@ impl<'a> PartialEq for Value<'a> {
     }
 }
 
-impl<'a> From<i64> for Value<'a> {
-    fn from(int: i64) -> Value<'a> {
+impl From<i64> for Value {
+    fn from(int: i64) -> Value {
         Value::Integer(int)
     }
 }
 
-impl<'a> From<f64> for Value<'a> {
-    fn from(num: f64) -> Value<'a> {
+impl From<f64> for Value {
+    fn from(num: f64) -> Value {
         Value::Double(num)
     }
 }
 
-impl<'a> From<bool> for Value<'a> {
-    fn from(b: bool) -> Value<'a> {
+impl From<bool> for Value {
+    fn from(b: bool) -> Value {
         Value::Boolean(b)
     }
 }
 
-impl<'a> From<&'a str> for Value<'a> {
-    fn from(s: &'a str) -> Value<'a> {
+impl From<&str> for Value {
+    fn from(s: &str) -> Value {
         Value::String(s.to_string())
     }
 }
 
-impl<'a> From<String> for Value<'a> {
-    fn from(s: String) -> Value<'a> {
+impl From<String> for Value {
+    fn from(s: String) -> Value {
         Value::String(s)
     }
 }
 
-impl<'a> From<Vec<Value<'a>>> for Value<'a> {
-    fn from(vs: Vec<Value<'a>>) -> Value<'a> {
+impl From<Vec<Value>> for Value {
+    fn from(vs: Vec<Value>) -> Value {
         Value::Array(vs.into_boxed_slice())
     }
 }
 
-impl<'a> From<FunctionValue<'a>> for Value<'a> {
-    fn from(f: FunctionValue<'a>) -> Value<'a> {
+impl From<FunctionValue> for Value {
+    fn from(f: FunctionValue) -> Value {
         Value::Function(f)
     }
 }
@@ -350,7 +351,7 @@ mod tests {
         assert_eq!(v1, v2);
     }
 
-    fn builtin_function<'a>(_: &mut Interpreter, _: Vec<Value<'a>>) -> Value<'a> {
+    fn builtin_function(_: &mut Interpreter, _: Vec<Value>) -> Value {
         Value::Null
     }
 
@@ -365,13 +366,13 @@ mod tests {
             name: Some(123),
             arity: 1,
             address: 123,
-            upvalues: &[],
+            upvalues: Vec::new(),
         };
         let d = FunctionValue::User {
             name: Some(123),
             arity: 1,
             address: 123,
-            upvalues: &[],
+            upvalues: Vec::new(),
         };
 
         assert_ne!(a, b);

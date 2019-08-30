@@ -31,9 +31,9 @@ impl<'a> Interpreter<'a> {
 
     pub fn evaluate(
         &mut self,
-        mut stack: Vec<Value<'a>>,
+        mut stack: Vec<Value>,
         code_object: CodeObject,
-    ) -> Result<Value<'a>, String> {
+    ) -> Result<Value, String> {
         let mut call_stack: Vec<usize> = Vec::new();
         let mut ip = 0;
         let mut bp = 0;

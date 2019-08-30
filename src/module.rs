@@ -6,7 +6,7 @@ use crate::value::Value;
 pub struct Module<'a> {
     pub name: &'a str,
     agent: Agent<'a>,
-    exports: HashMap<usize, Value<'a>>,
+    exports: HashMap<usize, Value>,
 }
 
 impl<'a> Module<'a> {
@@ -18,12 +18,12 @@ impl<'a> Module<'a> {
         }
     }
 
-    pub fn export(&mut self, name: &'a str, value: Value<'a>) {
+    pub fn export(&mut self, name: &'a str, value: Value) {
         let id = self.agent.intern_string(name);
         self.exports.insert(id, value);
     }
 
-    pub fn get(&self, idx: usize) -> Option<&Value<'a>> {
+    pub fn get(&self, idx: usize) -> Option<&Value> {
         self.exports.get(&idx)
     }
 }

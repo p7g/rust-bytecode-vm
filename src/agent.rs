@@ -2,7 +2,7 @@ use crate::value::Upvalue;
 
 pub struct Agent<'a> {
     pub string_table: Vec<&'a str>,
-    pub upvalues: Vec<Upvalue<'a>>,
+    pub upvalues: Vec<Upvalue>,
 }
 
 impl<'a> Agent<'a> {
