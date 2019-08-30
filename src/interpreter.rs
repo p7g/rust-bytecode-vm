@@ -233,15 +233,9 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::Return => {
                     let retval = pop!();
-                    bp = call_stack
-                        .pop()
-                        .ok_or("Missing bp on call_stack".to_string())?;
-                    let num_args = call_stack
-                        .pop()
-                        .ok_or("Missing num_args on call_stack".to_string())?;
-                    ip = call_stack
-                        .pop()
-                        .ok_or("Missing ip on call_stack".to_string())?;
+                    bp = call_stack.pop().ok_or("Missing bp on call_stack")?;
+                    let num_args = call_stack.pop().ok_or("Missing num_args on call_stack")?;
+                    ip = call_stack.pop().ok_or("Missing ip on call_stack")?;
                     pop!(num_args);
                     push!(retval);
                 }
