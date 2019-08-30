@@ -37,7 +37,7 @@ impl<'a> Interpreter<'a> {
         let mut call_stack: Vec<usize> = Vec::new();
         let mut ip = 0;
         let mut bp = 0;
-        let mut sp = 0;
+        let mut sp = stack.len();
 
         macro_rules! push {
             ($expr:expr) => {{
