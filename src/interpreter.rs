@@ -550,4 +550,20 @@ mod tests {
 
         assert_eq!(result, Ok(Value::from(123)));
     }
+
+    #[test]
+    fn test_pop() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            const_int 123
+            pop
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(Vec::new(), code);
+
+        assert_eq!(result, Ok(Value::Null));
+    }
 }
