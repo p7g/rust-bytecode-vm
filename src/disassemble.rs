@@ -43,8 +43,7 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             instruction @ OpCode::Jump
             | instruction @ OpCode::JumpIfTrue
             | instruction @ OpCode::JumpIfFalse
-            | instruction @ OpCode::Call
-            | instruction @ OpCode::Return => {
+            | instruction @ OpCode::Call => {
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)),);
             }
 
@@ -65,7 +64,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | instruction @ OpCode::Mul
             | instruction @ OpCode::Div
             | instruction @ OpCode::Mod
-            | instruction @ OpCode::Exp => println!("{:?}", instruction),
+            | instruction @ OpCode::Exp
+            | instruction @ OpCode::Return => println!("{:?}", instruction),
         }
     }
 
