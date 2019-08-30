@@ -243,6 +243,14 @@ impl<'a> Interpreter<'a> {
                 OpCode::Pop => {
                     pop!();
                 }
+
+                OpCode::LoadLocal => {
+                    push!(stack[bp + usize::from_le_bytes(next!(8))].clone());
+                }
+
+                OpCode::StoreLocal => {
+                    stack[bp + usize::from_le_bytes(next!(8))] = stack[sp - 1].clone();
+                }
             }
         }
 
@@ -565,5 +573,44 @@ mod tests {
         let result = interpreter.evaluate(Vec::new(), code);
 
         assert_eq!(result, Ok(Value::Null));
+    }
+
+    #[test]
+    fn test_load_local() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            const_int 123
+            const_double 432.0
+
+            load_local 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(Vec::new(), code);
+
+        assert_eq!(result, Ok(Value::from(123)));
+    }
+
+    #[test]
+    fn test_store_local() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            const_int 123
+
+            const_int 234
+            store_local 0
+            pop
+
+            load_local 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(Vec::new(), code);
+
+        assert_eq!(result, Ok(Value::from(234)));
     }
 }
