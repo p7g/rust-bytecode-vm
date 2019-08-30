@@ -139,6 +139,10 @@ impl Bytecode {
         self.op(OpCode::Call).usize(num_args)
     }
 
+    pub fn ret(self) -> Bytecode {
+        self.op(OpCode::Return)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -271,6 +275,12 @@ macro_rules! bytecode {
     (($builder:expr) call $num_args:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.call($num_args))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) return $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.ret())
             $($tt)*
         }
     }};
