@@ -47,8 +47,14 @@ impl<'a> Interpreter<'a> {
         }
         macro_rules! pop {
             () => {{
+                let val = stack.pop().ok_or("Stack underflow")?;
                 sp -= 1;
-                stack.pop().ok_or("Stack underflow")?
+                val
+            }};
+            ($num:expr) => {{
+                for _ in 0..$num {
+                    pop!();
+                }
             }};
         }
         macro_rules! next {
