@@ -114,7 +114,7 @@ impl<'a> Interpreter<'a> {
                 println!("--------------");
                 print_stack!(&stack);
                 println!("{:?}", OpCode::try_from(instruction)?);
-                println!("ip: {}", ip);
+                println!("ip: {} sp: {} bp: {}", ip, sp, bp);
             }
 
             match OpCode::try_from(instruction)? {
