@@ -245,6 +245,10 @@ impl<'a> Interpreter<'a> {
                     pop!(num_args);
                     push!(retval);
                 }
+
+                OpCode::Pop => {
+                    pop!();
+                }
             }
         }
 

@@ -65,7 +65,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | instruction @ OpCode::Div
             | instruction @ OpCode::Mod
             | instruction @ OpCode::Exp
-            | instruction @ OpCode::Return => println!("{:?}", instruction),
+            | instruction @ OpCode::Return
+            | instruction @ OpCode::Pop => println!("{:?}", instruction),
         }
     }
 
