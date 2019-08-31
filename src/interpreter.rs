@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
@@ -22,33 +23,42 @@ macro_rules! print_stack {
 
 pub struct Interpreter<'a> {
     agent: &'a mut Agent<'a>,
+    global: HashMap<usize, Value>,
+    call_stack: Vec<usize>,
+    stack: Vec<Value>,
+    ip: usize,
+    bp: usize,
+    sp: usize,
 }
 
 impl<'a> Interpreter<'a> {
     pub fn new(agent: &'a mut Agent<'a>) -> Interpreter<'a> {
-        Interpreter { agent }
+        Interpreter::with_global(agent, HashMap::new())
     }
 
-    pub fn evaluate(
-        &mut self,
-        mut stack: Vec<Value>,
-        code_object: CodeObject,
-    ) -> Result<Value, String> {
-        let mut call_stack: Vec<usize> = Vec::new();
-        let mut ip = 0;
-        let mut bp = 0;
-        let mut sp = stack.len();
+    pub fn with_global(agent: &'a mut Agent<'a>, global: HashMap<usize, Value>) -> Interpreter<'a> {
+        Interpreter {
+            agent,
+            global,
+            call_stack: Vec::new(),
+            stack: Vec::new(),
+            ip: 0,
+            bp: 0,
+            sp: 0,
+        }
+    }
 
+    pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value, String> {
         macro_rules! push {
             ($expr:expr) => {{
-                sp += 1;
-                stack.push($expr)
+                self.sp += 1;
+                self.stack.push($expr)
             }};
         }
         macro_rules! pop {
             () => {{
-                let val = stack.pop().ok_or("Stack underflow")?;
-                sp -= 1;
+                let val = self.stack.pop().ok_or("Stack underflow")?;
+                self.sp -= 1;
                 val
             }};
             ($num:expr) => {{
@@ -59,8 +69,8 @@ impl<'a> Interpreter<'a> {
         }
         macro_rules! next {
             () => {{
-                let inst = code_object.instructions.get(ip);
-                ip += 1;
+                let inst = code_object.instructions.get(self.ip);
+                self.ip += 1;
                 inst
             }};
             ($expr:expr) => {{
@@ -112,9 +122,9 @@ impl<'a> Interpreter<'a> {
         while let Some(instruction) = next!() {
             if cfg!(vm_debug) {
                 println!("--------------");
-                print_stack!(&stack);
+                print_stack!(&self.stack);
                 println!("{:?}", OpCode::try_from(instruction)?);
-                println!("ip: {} sp: {} bp: {}", ip, sp, bp);
+                println!("ip: {} sp: {} bp: {}", self.ip, self.sp, self.bp);
             }
 
             match OpCode::try_from(instruction)? {
@@ -160,14 +170,14 @@ impl<'a> Interpreter<'a> {
                 ),
 
                 OpCode::Jump => {
-                    ip = usize::from_le_bytes(next!(8));
+                    self.ip = usize::from_le_bytes(next!(8));
                 }
 
                 OpCode::JumpIfTrue => {
                     let to = usize::from_le_bytes(next!(8));
                     let cond = pop!();
                     if cond.is_truthy() {
-                        ip = to;
+                        self.ip = to;
                     }
                 }
 
@@ -175,7 +185,7 @@ impl<'a> Interpreter<'a> {
                     let to = usize::from_le_bytes(next!(8));
                     let cond = pop!();
                     if !cond.is_truthy() {
-                        ip = to;
+                        self.ip = to;
                     }
                 }
 
@@ -210,7 +220,8 @@ impl<'a> Interpreter<'a> {
                                 for _ in 0..num_args {
                                     args.push(pop!());
                                 }
-                                push!(function(self, args));
+                                let result = function(self, args);
+                                push!(result);
                             }
                             FunctionValue::User {
                                 arity,
@@ -219,11 +230,11 @@ impl<'a> Interpreter<'a> {
                                 ..
                             } => {
                                 ensure_arity!(arity, name);
-                                call_stack.push(ip); // return address
-                                call_stack.push(num_args); // for cleanup
-                                call_stack.push(bp); // current base pointer
-                                bp = sp; // new base is at current stack index
-                                ip = address; // jump into function
+                                self.call_stack.push(self.ip); // return address
+                                self.call_stack.push(num_args); // for cleanup
+                                self.call_stack.push(self.bp); // current base pointer
+                                self.bp = self.sp; // new base is at current stack index
+                                self.ip = address; // jump into function
                             }
                         }
                     } else {
@@ -233,9 +244,12 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::Return => {
                     let retval = pop!();
-                    bp = call_stack.pop().ok_or("Missing bp on call_stack")?;
-                    let num_args = call_stack.pop().ok_or("Missing num_args on call_stack")?;
-                    ip = call_stack.pop().ok_or("Missing ip on call_stack")?;
+                    self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
+                    let num_args = self
+                        .call_stack
+                        .pop()
+                        .ok_or("Missing num_args on call_stack")?;
+                    self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
                     pop!(num_args);
                     push!(retval);
                 }
@@ -245,16 +259,41 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadLocal => {
-                    push!(stack[bp + usize::from_le_bytes(next!(8))].clone());
+                    push!(self.stack[self.bp + usize::from_le_bytes(next!(8))].clone());
                 }
 
                 OpCode::StoreLocal => {
-                    stack[bp + usize::from_le_bytes(next!(8))] = stack[sp - 1].clone();
+                    self.stack[self.bp + usize::from_le_bytes(next!(8))] =
+                        self.stack[self.sp - 1].clone();
+                }
+
+                OpCode::LoadGlobal => {
+                    let id = usize::from_le_bytes(next!(8));
+                    if let Some(val) = self.global.get(&id) {
+                        push!(val.clone());
+                    } else {
+                        return Err(format!(
+                            "ReferenceError: {} is not defined",
+                            self.agent.string_table[id]
+                        ));
+                    }
+                }
+
+                OpCode::StoreGlobal => {
+                    let id = usize::from_le_bytes(next!(8));
+                    if self.global.contains_key(&id) {
+                        self.global.insert(id, pop!());
+                    } else {
+                        return Err(format!(
+                            "ReferenceError: {} is not defined",
+                            self.agent.string_table[id]
+                        ));
+                    }
                 }
             }
         }
 
-        Ok(if let Some(value) = stack.pop() {
+        Ok(if let Some(value) = self.stack.pop() {
             value
         } else {
             Value::Null
@@ -274,7 +313,7 @@ mod tests {
 
         let bytecode = Bytecode::new().halt().const_true().into();
 
-        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -286,7 +325,7 @@ mod tests {
         let bytecode = Bytecode::new().const_int(123).into();
 
         let code = CodeObject::new(bytecode);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -300,7 +339,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode);
 
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
         assert_eq!(result, Ok(Value::from(1.23)));
     }
 
@@ -311,7 +350,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_true().into();
 
-        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::from(true)));
     }
 
@@ -322,7 +361,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_false().into();
 
-        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::from(false)));
     }
 
@@ -333,7 +372,7 @@ mod tests {
 
         let bytecode = Bytecode::new().const_null().into();
 
-        let result = interpreter.evaluate(Vec::new(), CodeObject::new(bytecode));
+        let result = interpreter.evaluate(CodeObject::new(bytecode));
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -348,7 +387,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let code = CodeObject::new(bytecode.into());
 
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
         assert_eq!(result, Ok(Value::from("hello world")));
     }
 
@@ -364,7 +403,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(124.23)));
     }
@@ -381,7 +420,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(121.77)));
     }
@@ -398,7 +437,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(246f64)));
     }
@@ -415,7 +454,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(62f64)));
     }
@@ -432,7 +471,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(0f64)));
     }
@@ -449,7 +488,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(16)));
     }
@@ -471,7 +510,7 @@ mod tests {
         };
 
         let code = CodeObject::new(bytecode.into());
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(48)));
     }
@@ -498,7 +537,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(357)));
     }
@@ -524,7 +563,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(20)));
     }
@@ -533,6 +572,17 @@ mod tests {
     fn test_user_function() {
         let mut agent = Agent::new();
 
+        let name = agent.intern_string("ret123");
+        let ret123 = Value::from(FunctionValue::User {
+            name: Some(name),
+            address: 9,
+            arity: 0,
+            upvalues: Vec::new(),
+        });
+
+        let mut global = HashMap::new();
+        global.insert(name, ret123);
+
         let bytecode = bytecode! {
             jump main
 
@@ -540,21 +590,14 @@ mod tests {
             return
 
         main:
+            load_global name
             call 0
         };
 
         let code = CodeObject::new(bytecode.into());
         crate::disassemble::disassemble(&agent, &code).unwrap();
-        let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(
-            vec![Value::from(FunctionValue::User {
-                name: None,
-                address: 9,
-                arity: 0,
-                upvalues: Vec::new(),
-            })],
-            code,
-        );
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -570,7 +613,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::Null));
     }
@@ -588,7 +631,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -609,7 +652,7 @@ mod tests {
 
         let code = CodeObject::new(bytecode.into());
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(Vec::new(), code);
+        let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(234)));
     }

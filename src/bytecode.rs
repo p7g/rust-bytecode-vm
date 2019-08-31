@@ -155,6 +155,14 @@ impl Bytecode {
         self.op(OpCode::StoreLocal).usize(id)
     }
 
+    pub fn load_global(self, id: usize) -> Bytecode {
+        self.op(OpCode::LoadGlobal).usize(id)
+    }
+
+    pub fn store_global(self, id: usize) -> Bytecode {
+        self.op(OpCode::StoreGlobal).usize(id)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -311,6 +319,30 @@ macro_rules! bytecode {
     (($builder:expr) store_local $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.store_local($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) load_global ($id:expr) $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.load_global($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) store_global ($id:expr) $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.store_global($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) load_global $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.load_global($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) store_global $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.store_global($id))
             $($tt)*
         }
     }};

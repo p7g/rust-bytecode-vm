@@ -23,6 +23,8 @@ pub enum OpCode {
     Pop,
     LoadLocal,
     StoreLocal,
+    LoadGlobal,
+    StoreGlobal,
 }
 
 impl Into<u8> for OpCode {
@@ -57,6 +59,8 @@ impl std::convert::TryFrom<u8> for OpCode {
             18 => OpCode::Pop,
             19 => OpCode::LoadLocal,
             20 => OpCode::StoreLocal,
+            21 => OpCode::LoadGlobal,
+            22 => OpCode::StoreGlobal,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

@@ -46,7 +46,15 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | instruction @ OpCode::Call
             | instruction @ OpCode::LoadLocal
             | instruction @ OpCode::StoreLocal => {
-                println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)),);
+                println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
+            }
+
+            instruction @ OpCode::LoadGlobal | instruction @ OpCode::StoreGlobal => {
+                println!(
+                    "{:?}({:?})",
+                    instruction,
+                    agent.string_table[usize::from_le_bytes(next!(8))]
+                );
             }
 
             instruction @ OpCode::ConstString => {

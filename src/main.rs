@@ -8,6 +8,8 @@ mod module;
 mod opcode;
 mod value;
 
+use std::collections::HashMap;
+
 use agent::Agent;
 #[macro_use]
 use bytecode::Bytecode;
@@ -43,46 +45,55 @@ fn main() -> Result<(), String> {
     let mut agent = Agent::new();
 
     let bytecode = bytecode! {
-        call 1
-        jump_if_false 0
-        call 1
-        jump_if_false 0
+        const_int 3
+        const_int 4
+        load_global (agent.intern_string("print"))
         call 2
+        jump_if_true 0
+        const_int 2
+        load_global (agent.intern_string("to_string"))
+        call 1
+        jump_if_false 0
+        const_int 1
+        load_global (agent.intern_string("type_of"))
+        call 1
     };
 
     let code_object = CodeObject::new(bytecode.into());
 
     disassemble(&agent, &code_object)?;
 
-    let builtin_print = Value::Function(FunctionValue::Builtin {
-        name: Some(agent.intern_string("print")),
-        arity: 1,
-        function: print,
-    });
+    let mut global = HashMap::new();
 
-    let builtin_to_string = Value::Function(FunctionValue::Builtin {
-        name: Some(agent.intern_string("to_string")),
-        arity: 1,
-        function: to_string,
-    });
+    global.insert(
+        agent.intern_string("print"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("print")),
+            arity: 1,
+            function: print,
+        }),
+    );
 
-    let builtin_type_of = Value::Function(FunctionValue::Builtin {
-        name: Some(agent.intern_string("type_of")),
-        arity: 1,
-        function: type_of,
-    });
+    global.insert(
+        agent.intern_string("to_string"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("to_string")),
+            arity: 1,
+            function: to_string,
+        }),
+    );
 
-    let stack = vec![
-        Value::from(3),
-        Value::from(4),
-        builtin_print,
-        Value::from(2),
-        builtin_to_string,
-        Value::from(1),
-        builtin_type_of,
-    ];
-    let mut interpreter = Interpreter::new(&mut agent);
-    let result = interpreter.evaluate(stack, code_object)?;
+    global.insert(
+        agent.intern_string("type_of"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("type_of")),
+            arity: 1,
+            function: type_of,
+        }),
+    );
+
+    let mut interpreter = Interpreter::with_global(&mut agent, global);
+    let result = interpreter.evaluate(code_object)?;
 
     println!("\n{:?}", result);
 
