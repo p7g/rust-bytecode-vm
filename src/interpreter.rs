@@ -5,7 +5,6 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 
 use crate::agent::Agent;
-use crate::bytecode::Bytecode;
 use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
 use crate::value::{FunctionValue, Upvalue, Value};
@@ -472,7 +471,7 @@ impl<'a> Interpreter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::disassemble::disassemble;
+    use crate::bytecode::Bytecode;
     use pretty_assertions::assert_eq;
 
     #[test]
