@@ -38,7 +38,7 @@ impl Upvalue {
         }
     }
 
-    pub fn get(&self) -> Value {
+    pub fn get_value(&self) -> Value {
         if let UpvalueValue::Closed(value) = &self.value {
             value.clone()
         } else {
@@ -46,7 +46,7 @@ impl Upvalue {
         }
     }
 
-    pub fn set(&mut self, value: Value) {
+    pub fn set_value(&mut self, value: Value) {
         if let UpvalueValue::Closed(_) = &self.value {
             self.value = UpvalueValue::Closed(value); // FIXME: make sure this doesn't leak
         } else {

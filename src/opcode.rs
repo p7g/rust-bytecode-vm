@@ -28,6 +28,8 @@ pub enum OpCode {
     NewFunction,
     BindLocal,
     BindUpvalue,
+    LoadUpvalue,
+    StoreUpvalue,
 }
 
 impl Into<u8> for OpCode {
@@ -67,6 +69,8 @@ impl std::convert::TryFrom<u8> for OpCode {
             23 => OpCode::NewFunction,
             24 => OpCode::BindLocal,
             25 => OpCode::BindUpvalue,
+            26 => OpCode::LoadUpvalue,
+            27 => OpCode::StoreUpvalue,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

@@ -48,7 +48,9 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::LoadLocal
             | OpCode::StoreLocal
             | OpCode::BindLocal
-            | OpCode::BindUpvalue => {
+            | OpCode::BindUpvalue
+            | OpCode::LoadUpvalue
+            | OpCode::StoreUpvalue => {
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
             }
 

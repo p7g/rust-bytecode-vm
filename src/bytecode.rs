@@ -167,6 +167,22 @@ impl Bytecode {
         self.op(OpCode::NewFunction).usize(arity).usize(address)
     }
 
+    pub fn bind_local(self, id: usize) -> Bytecode {
+        self.op(OpCode::BindLocal).usize(id)
+    }
+
+    pub fn bind_upvalue(self, id: usize) -> Bytecode {
+        self.op(OpCode::BindUpvalue).usize(id)
+    }
+
+    pub fn load_upvalue(self, id: usize) -> Bytecode {
+        self.op(OpCode::LoadUpvalue).usize(id)
+    }
+
+    pub fn store_upvalue(self, id: usize) -> Bytecode {
+        self.op(OpCode::StoreUpvalue).usize(id)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -359,6 +375,30 @@ macro_rules! bytecode {
     (($builder:expr) new_function $arity:tt $address:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.new_function($arity, $address))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bind_local $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bind_local($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bind_upvalue $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bind_upvalue($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) load_upvalue $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.load_upvalue($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) store_upvalue $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.store_upvalue($id))
             $($tt)*
         }
     }};

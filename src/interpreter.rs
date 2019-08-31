@@ -25,7 +25,7 @@ macro_rules! print_stack {
 
 pub struct Interpreter<'a> {
     agent: &'a mut Agent<'a>,
-    global: HashMap<usize, Value>,
+    pub global: HashMap<usize, Value>,
     call_stack: Vec<usize>,
     stack: Vec<Value>,
     ip: usize,
@@ -87,6 +87,44 @@ impl<'a> Interpreter<'a> {
 
                 array
             }};
+        }
+
+        macro_rules! top {
+            () => {
+                self.stack[self.sp - 1]
+            };
+        }
+
+        // in any scope except the global scope, the base pointer points to the executing function
+        macro_rules! locals_index {
+            () => {
+                if self.call_stack.is_empty() {
+                    0
+                } else {
+                    self.bp + 1
+                }
+            };
+        }
+
+        macro_rules! locals {
+            ($index:expr) => {
+                self.stack[$index + locals_index!()]
+            };
+        }
+
+        macro_rules! executing_function {
+            () => {
+                if self.call_stack.is_empty() {
+                    return Err("Tried to get executing function in global scope".to_string());
+                } else if let func @ Value::Function(_) = &self.stack[self.bp] {
+                    func.clone()
+                } else {
+                    return Err(
+                        "Tried to get executing function but bp didn't point to function"
+                            .to_string(),
+                    );
+                }
+            };
         }
 
         macro_rules! number_binop {
@@ -257,7 +295,7 @@ impl<'a> Interpreter<'a> {
                     while let Some(uv) = self.agent.upvalues.pop() {
                         if uv.borrow().is_open() {
                             let i = uv.borrow().stack_index();
-                            if i < self.sp - num_args {
+                            if i < self.bp - num_args {
                                 self.agent.upvalues.push(uv);
                                 break;
                             }
@@ -267,7 +305,7 @@ impl<'a> Interpreter<'a> {
                         }
                     }
 
-                    pop!(num_args);
+                    pop!(num_args + self.sp - self.bp);
                     push!(retval);
                 }
 
@@ -276,12 +314,11 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadLocal => {
-                    push!(self.stack[self.bp + usize::from_le_bytes(next!(8))].clone());
+                    push!(locals![usize::from_le_bytes(next!(8))].clone());
                 }
 
                 OpCode::StoreLocal => {
-                    self.stack[self.bp + usize::from_le_bytes(next!(8))] =
-                        self.stack[self.sp - 1].clone();
+                    self.stack[self.bp + usize::from_le_bytes(next!(8))] = top!().clone();
                 }
 
                 OpCode::LoadGlobal => {
@@ -321,13 +358,23 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BindLocal => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = locals_index!() + usize::from_le_bytes(next!(8));
                     let mut func = pop!();
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-                        let upvalue = Rc::new(RefCell::new(Upvalue::new(idx)));
-                        self.agent.upvalues.push(upvalue.clone());
-                        upvalues.push(upvalue);
+                        let upvalue = if let Some(upvalue) =
+                            self.agent.upvalues.iter().find(|uv| {
+                                uv.borrow().is_open() && uv.borrow().stack_index() == idx
+                            }) {
+                            upvalue
+                        } else {
+                            self.agent
+                                .upvalues
+                                .push(Rc::new(RefCell::new(Upvalue::new(idx))));
+                            self.agent.upvalues.last().unwrap()
+                        };
+                        upvalues.push(upvalue.clone());
+                        push!(func);
                     } else {
                         return Err("Cannot bind local to non-user function".to_string());
                     }
@@ -338,13 +385,50 @@ impl<'a> Interpreter<'a> {
                     let mut func = pop!();
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-                        let uv =
-                            self.agent.upvalues.iter().find(|uv| {
-                                uv.borrow().is_open() && uv.borrow().stack_index() == idx
-                            });
-                        if let Some(upvalue) = uv {
-                            upvalues.push(upvalue.clone());
+                        if let Value::Function(FunctionValue::User {
+                            upvalues: efn_upvalues,
+                            ..
+                        }) = &executing_function!()
+                        {
+                            upvalues.push(efn_upvalues[idx].clone());
+                        } else {
+                            unreachable!();
                         }
+                        push!(func);
+                    } else {
+                        return Err("Cannot bind upvalue to non-user function".to_string());
+                    }
+                }
+
+                OpCode::LoadUpvalue => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    if let Value::Function(FunctionValue::User { upvalues, .. }) =
+                        &executing_function!()
+                    {
+                        let upvalue = (*upvalues[idx]).borrow();
+                        if upvalue.is_open() {
+                            push!(self.stack[upvalue.stack_index()].clone());
+                        } else {
+                            push!(upvalue.get_value());
+                        }
+                    } else {
+                        unreachable!();
+                    }
+                }
+
+                OpCode::StoreUpvalue => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    if let Value::Function(FunctionValue::User { upvalues, .. }) =
+                        &executing_function!()
+                    {
+                        let upvalue = &upvalues[idx];
+                        if upvalue.borrow().is_open() {
+                            self.stack[upvalue.borrow().stack_index()] = top!().clone();
+                        } else {
+                            upvalue.borrow_mut().set_value(top!().clone());
+                        }
+                    } else {
+                        unreachable!();
                     }
                 }
             }
@@ -361,6 +445,7 @@ impl<'a> Interpreter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::disassemble::disassemble;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -773,5 +858,146 @@ mod tests {
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(999)));
+    }
+
+    #[test]
+    fn test_bind_local() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        func:
+            load_upvalue 0
+            return
+
+        main:
+            const_int 123
+            new_function 0 func
+            bind_local 0
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(123)));
+    }
+
+    #[test]
+    fn test_bind_upvalue() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        func1:
+            new_function 0 func2
+            bind_upvalue 0
+            return
+
+        func2:
+            load_upvalue 0
+            return
+
+        main:
+            const_int 2334
+            new_function 0 func1
+            bind_local 0
+            call 0
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(2334)));
+    }
+
+    #[test]
+    fn test_load_upvalue() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        test:
+            load_upvalue 0
+            return
+
+        main:
+            const_string (agent) "hello"
+            new_function 0 test
+            bind_local 0
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from("hello")));
+    }
+
+    #[test]
+    fn test_store_upvalue() {
+        let mut agent = Agent::new();
+
+        let a = agent.intern_string("a");
+        let b = agent.intern_string("b");
+
+        let bytecode = bytecode! {
+            jump main
+
+        test:
+            const_int 0
+            new_function 0 func_a
+            bind_local 0
+            store_global a
+            new_function 0 func_b
+            bind_local 0
+            store_global b
+            const_null
+            return
+
+        func_a:
+            load_upvalue 0
+            return
+
+        func_b:
+            load_upvalue 0
+            const_int 1
+            add
+            store_upvalue 0
+            pop
+            const_null
+            return
+
+        main:
+            new_function 0 test
+            call 0
+            pop
+            load_global b
+            call 0
+            pop
+            load_global b
+            call 0
+            pop
+            load_global a
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+
+        let mut global = HashMap::new();
+        global.insert(a, Value::Null);
+        global.insert(b, Value::Null);
+
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(2)));
     }
 }
