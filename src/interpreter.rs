@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::agent::Agent;
 use crate::code_object::CodeObject;
+use crate::disassemble::disassemble;
 use crate::opcode::OpCode;
 use crate::value::{FunctionValue, Upvalue, Value};
 
@@ -50,6 +51,10 @@ impl<'a> Interpreter<'a> {
     }
 
     pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value, String> {
+        if cfg!(vm_debug) {
+            disassemble(self.agent, &code_object)?;
+        }
+
         macro_rules! push {
             ($expr:expr) => {{
                 self.sp += 1;
