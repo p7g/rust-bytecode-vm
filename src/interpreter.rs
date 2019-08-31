@@ -321,7 +321,8 @@ impl<'a> Interpreter<'a> {
                         }
                     }
 
-                    pop!(num_args + self.sp - self.bp);
+                    // minus one for the expression being returned
+                    pop!(num_args + self.sp - self.bp - 1);
                     push!(retval);
                 }
 
