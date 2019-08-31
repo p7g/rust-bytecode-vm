@@ -6,9 +6,7 @@ import os
 
 
 def main():
-    # find the match expression
-    # make sure all variants are accounted for
-    # make sure all values return the correct variant
+    '''Check if any variants of the OpCode enum are not covered by the TryFrom<u8> impl'''
     process = subprocess.run([
         'rustup', 'run', 'nightly', 'rustc', '-Z', 'ast-json', 'src/opcode.rs'
     ],
