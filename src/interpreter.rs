@@ -334,7 +334,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::StoreLocal => {
-                    self.stack[self.bp + usize::from_le_bytes(next!(8))] = top!().clone();
+                    let idx = usize::from_le_bytes(next!(8));
+                    locals![idx] = top!().clone();
                 }
 
                 OpCode::LoadGlobal => {
