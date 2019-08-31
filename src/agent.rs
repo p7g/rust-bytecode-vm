@@ -1,8 +1,10 @@
 use crate::value::Upvalue;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Agent<'a> {
     pub string_table: Vec<&'a str>,
-    pub upvalues: Vec<Upvalue>,
+    pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
 }
 
 impl<'a> Agent<'a> {

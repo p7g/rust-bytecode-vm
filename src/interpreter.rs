@@ -1,12 +1,14 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::{Add, Div, Mul, Rem, Sub};
+use std::rc::Rc;
 
 use crate::agent::Agent;
 use crate::bytecode::Bytecode;
 use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
-use crate::value::{FunctionValue, Value};
+use crate::value::{FunctionValue, Upvalue, Value};
 
 macro_rules! print_stack {
     ($stack:expr) => {{
@@ -192,12 +194,12 @@ impl<'a> Interpreter<'a> {
                 OpCode::Call => {
                     let function = pop!();
                     let num_args = usize::from_le_bytes(next!(8));
-                    if let Value::Function(f) = function {
+                    if let Value::Function(f) = &function {
                         macro_rules! ensure_arity {
                             ($arity:expr, $name:expr) => {{
                                 if num_args < $arity {
                                     let name = if let Some(name) = $name {
-                                        self.agent.string_table[name]
+                                        self.agent.string_table[*name]
                                     } else {
                                         "<anonymous>"
                                     };
@@ -215,7 +217,7 @@ impl<'a> Interpreter<'a> {
                                 name,
                                 ..
                             } => {
-                                ensure_arity!(arity, name);
+                                ensure_arity!(*arity, name);
                                 let mut args = Vec::new();
                                 for _ in 0..num_args {
                                     args.push(pop!());
@@ -229,12 +231,13 @@ impl<'a> Interpreter<'a> {
                                 name,
                                 ..
                             } => {
-                                ensure_arity!(arity, name);
+                                ensure_arity!(*arity, name);
                                 self.call_stack.push(self.ip); // return address
                                 self.call_stack.push(num_args); // for cleanup
                                 self.call_stack.push(self.bp); // current base pointer
                                 self.bp = self.sp; // new base is at current stack index
-                                self.ip = address; // jump into function
+                                self.ip = *address; // jump into function
+                                push!(function);
                             }
                         }
                     } else {
@@ -250,6 +253,20 @@ impl<'a> Interpreter<'a> {
                         .pop()
                         .ok_or("Missing num_args on call_stack")?;
                     self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
+
+                    while let Some(uv) = self.agent.upvalues.pop() {
+                        if uv.borrow().is_open() {
+                            let i = uv.borrow().stack_index();
+                            if i < self.sp - num_args {
+                                self.agent.upvalues.push(uv);
+                                break;
+                            }
+                            uv.borrow_mut().close(self.stack[i].clone());
+                        } else {
+                            return Err("Had closed upvalue in agent.upvalues".to_string());
+                        }
+                    }
+
                     pop!(num_args);
                     push!(retval);
                 }
@@ -301,6 +318,34 @@ impl<'a> Interpreter<'a> {
                         arity,
                         upvalues: Vec::new(),
                     }));
+                }
+
+                OpCode::BindLocal => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    let mut func = pop!();
+
+                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+                        let upvalue = Rc::new(RefCell::new(Upvalue::new(idx)));
+                        self.agent.upvalues.push(upvalue.clone());
+                        upvalues.push(upvalue);
+                    } else {
+                        return Err("Cannot bind local to non-user function".to_string());
+                    }
+                }
+
+                OpCode::BindUpvalue => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    let mut func = pop!();
+
+                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+                        let uv =
+                            self.agent.upvalues.iter().find(|uv| {
+                                uv.borrow().is_open() && uv.borrow().stack_index() == idx
+                            });
+                        if let Some(upvalue) = uv {
+                            upvalues.push(upvalue.clone());
+                        }
+                    }
                 }
             }
         }

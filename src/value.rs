@@ -1,4 +1,5 @@
 use crate::interpreter::Interpreter;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Value;
@@ -18,6 +19,14 @@ impl Upvalue {
     pub fn new(value: usize) -> Upvalue {
         Upvalue {
             value: UpvalueValue::Open(value),
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        if let UpvalueValue::Open(_) = self.value {
+            true
+        } else {
+            false
         }
     }
 
@@ -65,7 +74,7 @@ pub enum FunctionValue {
         name: Option<usize>,
         arity: usize,
         address: usize,
-        upvalues: Vec<Rc<Upvalue>>,
+        upvalues: Vec<Rc<RefCell<Upvalue>>>,
     },
 }
 
