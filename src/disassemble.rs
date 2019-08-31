@@ -27,12 +27,13 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
 
     while let Some(instruction) = next!() {
         print!("{}: ", ip - 1);
-        match OpCode::try_from(instruction)? {
-            instruction @ OpCode::ConstInt => {
+        let instruction = OpCode::try_from(instruction)?;
+        match instruction {
+            OpCode::ConstInt => {
                 println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(8)));
             }
 
-            instruction @ OpCode::ConstDouble => {
+            OpCode::ConstDouble => {
                 println!(
                     "{:?}({:?})",
                     instruction,
@@ -40,24 +41,18 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
                 );
             }
 
-            instruction @ OpCode::Jump
-            | instruction @ OpCode::JumpIfTrue
-            | instruction @ OpCode::JumpIfFalse
-            | instruction @ OpCode::Call
-            | instruction @ OpCode::LoadLocal
-            | instruction @ OpCode::StoreLocal => {
+            OpCode::Jump
+            | OpCode::JumpIfTrue
+            | OpCode::JumpIfFalse
+            | OpCode::Call
+            | OpCode::LoadLocal
+            | OpCode::StoreLocal => {
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
             }
 
-            instruction @ OpCode::LoadGlobal | instruction @ OpCode::StoreGlobal => {
-                println!(
-                    "{:?}({:?})",
-                    instruction,
-                    agent.string_table[usize::from_le_bytes(next!(8))]
-                );
-            }
-
-            instruction @ OpCode::ConstString => {
+            OpCode::LoadGlobal
+            | OpCode::StoreGlobal
+            | OpCode::ConstString => {
                 println!(
                     "{:?}({:?})",
                     instruction,
@@ -65,18 +60,18 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
                 );
             }
 
-            instruction @ OpCode::Halt
-            | instruction @ OpCode::ConstTrue
-            | instruction @ OpCode::ConstFalse
-            | instruction @ OpCode::ConstNull
-            | instruction @ OpCode::Add
-            | instruction @ OpCode::Sub
-            | instruction @ OpCode::Mul
-            | instruction @ OpCode::Div
-            | instruction @ OpCode::Mod
-            | instruction @ OpCode::Exp
-            | instruction @ OpCode::Return
-            | instruction @ OpCode::Pop => println!("{:?}", instruction),
+            OpCode::Halt
+            | OpCode::ConstTrue
+            | OpCode::ConstFalse
+            | OpCode::ConstNull
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::Exp
+            | OpCode::Return
+            | OpCode::Pop => println!("{:?}", instruction),
         }
     }
 
