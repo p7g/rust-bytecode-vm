@@ -95,6 +95,23 @@ impl<'a> Interpreter<'a> {
             };
         }
 
+        // in any scope except the global scope, the base pointer points after the arguments
+        macro_rules! arguments_index {
+            () => {
+                if self.call_stack.is_empty() {
+                    return Err("Trying to access arguments when not in function".to_string());
+                } else {
+                    self.bp - 1
+                }
+            };
+        }
+
+        macro_rules! arguments {
+            ($idx:expr) => {
+                self.stack[arguments_index!() - $idx]
+            };
+        }
+
         // in any scope except the global scope, the base pointer points to the executing function
         macro_rules! locals_index {
             () => {
@@ -430,6 +447,16 @@ impl<'a> Interpreter<'a> {
                     } else {
                         unreachable!();
                     }
+                }
+
+                OpCode::LoadArgument => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    push!(arguments![idx].clone());
+                }
+
+                OpCode::StoreArgument => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    arguments![idx] = top!().clone();
                 }
             }
         }
