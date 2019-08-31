@@ -163,6 +163,10 @@ impl Bytecode {
         self.op(OpCode::StoreGlobal).usize(id)
     }
 
+    pub fn new_function(self, arity: usize, address: usize) -> Bytecode {
+        self.op(OpCode::NewFunction).usize(arity).usize(address)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -343,6 +347,18 @@ macro_rules! bytecode {
     (($builder:expr) store_global $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.store_global($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) new_function $arity:tt $label:ident $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.op(OpCode::NewFunction).usize($arity).address_of(stringify!($label)))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) new_function $arity:tt $address:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.new_function($arity, $address))
             $($tt)*
         }
     }};

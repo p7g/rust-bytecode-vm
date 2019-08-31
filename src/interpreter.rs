@@ -290,6 +290,18 @@ impl<'a> Interpreter<'a> {
                         ));
                     }
                 }
+
+                OpCode::NewFunction => {
+                    let arity = usize::from_le_bytes(next!(8));
+                    let address = usize::from_le_bytes(next!(8));
+
+                    push!(Value::from(FunctionValue::User {
+                        name: None,
+                        address,
+                        arity,
+                        upvalues: Vec::new(),
+                    }));
+                }
             }
         }
 
@@ -693,5 +705,28 @@ mod tests {
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(27)));
+    }
+
+    #[test]
+    fn test_new_function() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        func:
+            const_int 999
+            return
+
+        main:
+            new_function 0 func
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(999)));
     }
 }
