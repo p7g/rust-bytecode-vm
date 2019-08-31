@@ -656,4 +656,42 @@ mod tests {
 
         assert_eq!(result, Ok(Value::from(234)));
     }
+
+    #[test]
+    fn test_load_global() {
+        let mut agent = Agent::new();
+        let mut global = HashMap::new();
+
+        global.insert(agent.intern_string("test"), Value::from("test"));
+
+        let bytecode = bytecode! {
+            load_global (agent.intern_string("test"))
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from("test")));
+    }
+
+    #[test]
+    fn test_store_global() {
+        let mut agent = Agent::new();
+        let mut global = HashMap::new();
+
+        global.insert(agent.intern_string("test"), Value::from(3));
+
+        let bytecode = bytecode! {
+            load_global (agent.intern_string("test"))
+            const_int 3
+            exp
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(27)));
+    }
 }
