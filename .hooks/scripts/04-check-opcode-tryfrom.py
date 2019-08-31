@@ -105,9 +105,12 @@ def main():
 
         matched_opcodes.append((variant, value))
 
+    variants = set(variants)
+    matched_opcodes = set(matched_opcodes)
     if variants != matched_opcodes:
-        print('\nVariants', variants)
-        print('\nMatched Opcodes', matched_opcodes, '\n')
+        print('\nDifference in OpCode enum and TryFrom:')
+        print('\nVariants:', variants - matched_opcodes or 'none')
+        print('\nMatched Opcodes:', matched_opcodes - variants or 'none', '\n')
         exit(1)
 
 
