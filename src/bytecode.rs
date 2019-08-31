@@ -183,6 +183,14 @@ impl Bytecode {
         self.op(OpCode::StoreUpvalue).usize(id)
     }
 
+    pub fn load_argument(self, id: usize) -> Bytecode {
+        self.op(OpCode::LoadArgument).usize(id)
+    }
+
+    pub fn store_argument(self, id: usize) -> Bytecode {
+        self.op(OpCode::StoreArgument).usize(id)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -399,6 +407,18 @@ macro_rules! bytecode {
     (($builder:expr) store_upvalue $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.store_upvalue($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) load_argument $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.load_argument($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) store_argument $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.store_argument($id))
             $($tt)*
         }
     }};
