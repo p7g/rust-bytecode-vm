@@ -1033,4 +1033,56 @@ mod tests {
 
         assert_eq!(result, Ok(Value::from(2)));
     }
+
+    #[test]
+    fn test_load_argument() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        func:
+            load_argument 0
+            return
+
+        main:
+            const_string (agent) "hullo"
+            new_function 1 func
+            call 1
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from("hullo")));
+    }
+
+    #[test]
+    fn test_store_argument() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            jump main
+
+        func:
+            load_argument 0
+            const_int 2
+            add
+            store_argument 0
+            load_argument 0
+            return
+
+        main:
+            const_int 1
+            new_function 1 func
+            call 1
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(3)));
+    }
 }
