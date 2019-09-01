@@ -464,6 +464,51 @@ impl<'a> Interpreter<'a> {
                     let idx = usize::from_le_bytes(next!(8));
                     arguments![idx] = top!().clone();
                 }
+
+                OpCode::NewArray => {
+                    let len = usize::from_le_bytes(next!(8));
+                    push!(Value::from(vec![Value::Null; len]));
+                }
+
+                OpCode::ArrayGet => {
+                    let array = pop!();
+                    let idx = pop!();
+
+                    if let Value::Integer(idx) = idx {
+                        if let Value::Array(array) = array {
+                            let idx = idx as usize;
+                            if array.borrow().len() > idx {
+                                push!(array.borrow()[idx].clone());
+                            } else {
+                                return Err(format!("Index {} is out of bounds", idx));
+                            }
+                        } else {
+                            return Err("Trying to access index of non-array".to_string());
+                        }
+                    } else {
+                        return Err("Array index must be an integer".to_string());
+                    }
+                }
+
+                OpCode::ArraySet => {
+                    let array = pop!();
+                    let idx = pop!();
+
+                    if let Value::Integer(idx) = idx {
+                        if let Value::Array(array) = array {
+                            let idx = idx as usize;
+                            if array.borrow().len() > idx {
+                                array.borrow_mut()[idx] = top!().clone();
+                            } else {
+                                return Err(format!("Index {} is out of bounds", idx));
+                            }
+                        } else {
+                            return Err("Trying to set index of non-array".to_string());
+                        }
+                    } else {
+                        return Err("Array index must be an integer".to_string());
+                    }
+                }
             }
         }
 
@@ -1084,5 +1129,69 @@ mod tests {
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(3)));
+    }
+
+    #[test]
+    fn test_new_array() {
+        let mut agent = Agent::new();
+
+        let bytecode = bytecode! {
+            new_array 10
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(vec![Value::Null; 10])));
+    }
+
+    #[test]
+    fn test_array_get() {
+        let mut agent = Agent::new();
+
+        let array = agent.intern_string("array");
+
+        let mut global = HashMap::new();
+        global.insert(array, Value::from(vec![Value::Null, Value::from(123)]));
+
+        let bytecode = bytecode! {
+            const_int 1
+            load_global array
+            array_get
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(123)));
+    }
+
+    #[test]
+    fn test_array_set() {
+        let mut agent = Agent::new();
+
+        let array = agent.intern_string("array");
+
+        let mut global = HashMap::new();
+        global.insert(array, Value::from(vec![Value::Null, Value::from(123)]));
+
+        let bytecode = bytecode! {
+            const_int 9229
+            const_int 1
+            load_global array
+            array_set
+            load_global array
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![Value::Null, Value::from(9229)]))
+        );
     }
 }

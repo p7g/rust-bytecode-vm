@@ -52,7 +52,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::LoadUpvalue
             | OpCode::StoreUpvalue
             | OpCode::LoadArgument
-            | OpCode::StoreArgument => {
+            | OpCode::StoreArgument
+            | OpCode::NewArray => {
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
             }
 
@@ -84,7 +85,9 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::Mod
             | OpCode::Exp
             | OpCode::Return
-            | OpCode::Pop => println!("{:?}", instruction),
+            | OpCode::Pop
+            | OpCode::ArrayGet
+            | OpCode::ArraySet => println!("{:?}", instruction),
         }
     }
 

@@ -191,6 +191,18 @@ impl Bytecode {
         self.op(OpCode::StoreArgument).usize(id)
     }
 
+    pub fn new_array(self, len: usize) -> Bytecode {
+        self.op(OpCode::NewArray).usize(len)
+    }
+
+    pub fn array_get(self) -> Bytecode {
+        self.op(OpCode::ArrayGet)
+    }
+
+    pub fn array_set(self) -> Bytecode {
+        self.op(OpCode::ArraySet)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -419,6 +431,24 @@ macro_rules! bytecode {
     (($builder:expr) store_argument $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.store_argument($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) new_array $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.new_array($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) array_get $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.array_get())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) array_set $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.array_set())
             $($tt)*
         }
     }};

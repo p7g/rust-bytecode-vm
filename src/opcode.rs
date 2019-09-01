@@ -32,6 +32,9 @@ pub enum OpCode {
     StoreUpvalue,
     LoadArgument,
     StoreArgument,
+    NewArray,
+    ArrayGet,
+    ArraySet,
 }
 
 impl Into<u8> for OpCode {
@@ -75,6 +78,9 @@ impl std::convert::TryFrom<u8> for OpCode {
             27 => OpCode::StoreUpvalue,
             28 => OpCode::LoadArgument,
             29 => OpCode::StoreArgument,
+            30 => OpCode::NewArray,
+            31 => OpCode::ArrayGet,
+            32 => OpCode::ArraySet,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

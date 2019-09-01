@@ -158,7 +158,7 @@ pub enum Value {
     Boolean(bool),
     Null,
     String(String),
-    Array(Box<[Value]>),
+    Array(Rc<RefCell<Box<[Value]>>>),
     Function(FunctionValue),
 }
 
@@ -181,7 +181,7 @@ impl Value {
             Value::Double(n) => *n != 0f64,
             Value::Boolean(b) => *b,
             Value::String(s) => !s.is_empty(),
-            Value::Array(vs) => !vs.is_empty(),
+            Value::Array(vs) => !vs.borrow().is_empty(),
             Value::Function(_) => true,
             Value::Null => false,
         }
@@ -198,7 +198,7 @@ impl std::fmt::Display for Value {
             Value::Null => write!(f, "null"),
             Value::Array(vs) => {
                 write!(f, "[")?;
-                for val in vs.iter() {
+                for val in vs.borrow().iter() {
                     write!(f, "{}", val)?;
                 }
                 write!(f, "]")
@@ -252,10 +252,13 @@ impl PartialEq for Value {
             }
             Value::Array(a) => {
                 if let Value::Array(b) = other {
-                    if a.len() != b.len() {
+                    if a.borrow().len() != b.borrow().len() {
                         false
                     } else {
-                        a.iter().zip(b.iter()).all(|(a, b)| a == b)
+                        a.borrow()
+                            .iter()
+                            .zip(b.borrow().iter())
+                            .all(|(a, b)| a == b)
                     }
                 } else {
                     false
@@ -304,7 +307,7 @@ impl From<String> for Value {
 
 impl From<Vec<Value>> for Value {
     fn from(vs: Vec<Value>) -> Value {
-        Value::Array(vs.into_boxed_slice())
+        Value::Array(Rc::new(RefCell::new(vs.into_boxed_slice())))
     }
 }
 
@@ -355,7 +358,7 @@ mod tests {
             Value::from(3.21),
             Value::from("hwhwhwh"),
         ]);
-        let v2 = Value::Array(vs.into_boxed_slice());
+        let v2 = Value::Array(Rc::new(RefCell::new(vs.into_boxed_slice())));
 
         assert_eq!(v1, v2);
     }
