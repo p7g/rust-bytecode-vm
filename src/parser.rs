@@ -1,6 +1,8 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
+use crate::agent::Agent;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum TokenType {
     Identifier,
@@ -269,10 +271,259 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+    type Item = Result<Token, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next().unwrap()
+        self.next_token()
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct Statement {
+    position: Position,
+    value: StatementKind,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+enum StatementKind {
+    FunctionDeclaration {
+        name: Expression,
+        parameters: Vec<Expression>,
+        body: Vec<Statement>,
+    },
+    LetDeclaration {
+        name: Expression,
+        value: Option<Expression>,
+    },
+    IfStatement {
+        predicate: Expression,
+        then_body: Vec<Statement>,
+        else_body: Option<Vec<Statement>>,
+    },
+    WhileStatement {
+        predicate: Expression,
+        body: Vec<Statement>,
+    },
+    ForStatement {
+        initializer: Option<Box<Statement>>,
+        predicate: Option<Expression>,
+        increment: Option<Expression>,
+        body: Vec<Statement>,
+    },
+    BreakStatement,
+    ContinueStatement,
+    ReturnStatement(Option<Expression>),
+    ExpressionStatement(Expression),
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum Operator {
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    StarStar,
+    And,
+    Pipe,
+    Caret,
+    AndAnd,
+    PipePipe,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct Expression {
+    position: Position,
+    value: ExpressionKind,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+enum ExpressionKind {
+    Identifier(usize),
+    Integer(i64),
+    Double(f64),
+    Function {
+        name: Option<usize>,
+        parameters: Vec<Expression>,
+        body: Vec<Statement>,
+    },
+    UnaryOperation(Operator, Box<Expression>),
+    BinaryOperation(Box<Expression>, Operator, Box<Expression>),
+    Call(Box<Expression>, Vec<Expression>),
+    Index(Box<Expression>, Box<Expression>),
+}
+
+pub type ParseResult = Result<Statement, String>;
+
+struct Parser<'a> {
+    agent: &'a mut Agent,
+    lexer: Peekable<Lexer<'a>>,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(agent: &'a mut Agent, lexer: Lexer<'a>) -> Parser<'a> {
+        Parser {
+            agent,
+            lexer: lexer.peekable(),
+        }
+    }
+
+    pub fn next_statement(&mut self) -> Option<ParseResult> {
+        match self.peek() {
+            Ok(Some(_)) => Some(self.parse_statement()),
+            Err(msg) => Some(Err(msg.clone())),
+            Ok(None) => None,
+        }
+    }
+
+    fn next_token(&mut self) -> Result<Option<Token>, String> {
+        self.lexer.next().transpose()
+    }
+
+    fn expect(&mut self, expected: TokenType) -> Result<Token, String> {
+        match &self.next_token()? {
+            Some(tok) if tok.typ == expected => Ok(tok.clone()),
+            Some(Token {
+                typ,
+                position: Position { line, column },
+                ..
+            }) => Err(format!(
+                "Expected {:?}, got {:?} at {}:{}",
+                expected, typ, line, column
+            )),
+            None => Err(format!("Expected {:?}, found end of input", expected)),
+        }
+    }
+
+    fn peek(&mut self) -> Result<Option<&Token>, String> {
+        match self.lexer.peek() {
+            Some(&Ok(ref tok)) => Ok(Some(tok)),
+            Some(Err(msg)) => Err(msg.clone()),
+            None => Ok(None),
+        }
+    }
+
+    fn matches(&mut self, expected: TokenType) -> Result<bool, String> {
+        match self.peek()? {
+            Some(&Token { typ, .. }) if typ == expected => {
+                self.expect(expected)?;
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
+
+    fn parse_statement(&mut self) -> ParseResult {
+        while let Some(token) = self.peek()? {
+            match token.typ {
+                TokenType::Let => return self.parse_let_declaration(),
+                TokenType::Function => return self.parse_function_declaration(),
+                _ => unimplemented!(),
+            }
+        }
+
+        unimplemented!()
+    }
+
+    fn parse_let_declaration(&mut self) -> ParseResult {
+        let let_ = self.expect(TokenType::Let)?;
+        let ident = self.parse_identifier_expression()?;
+
+        let value = if self.matches(TokenType::Equal)? {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        self.expect(TokenType::Semicolon)?;
+
+        Ok(Statement {
+            position: let_.position,
+            value: StatementKind::LetDeclaration { name: ident, value },
+        })
+    }
+
+    fn parse_function_declaration(&mut self) -> ParseResult {
+        let function = self.expect(TokenType::Function)?;
+        let ident = self.parse_expression()?;
+
+        if let ExpressionKind::Identifier(_) = ident.value {
+        } else {
+            return Err(format!(
+                "Expected identifier at {}:{}",
+                ident.position.line, ident.position.column
+            ));
+        }
+
+        self.expect(TokenType::LeftParen)?;
+
+        let mut params = Vec::new();
+        while !self.matches(TokenType::RightParen)? {
+            let param = self.parse_expression()?;
+            if let ExpressionKind::Identifier(_) = param.value {
+                params.push(param);
+            } else {
+                return Err(format!(
+                    "Expected identifier at {}:{}",
+                    param.position.line, param.position.column
+                ));
+            }
+            if let Some(Token {
+                typ: TokenType::RightParen,
+                ..
+            }) = self.peek()?
+            {
+                self.matches(TokenType::Comma)?;
+            } else {
+                self.expect(TokenType::Comma)?;
+            }
+        }
+
+        let mut body = Vec::new();
+
+        self.expect(TokenType::LeftBrace)?;
+        while !self.matches(TokenType::RightBrace)? {
+            body.push(self.parse_statement()?);
+        }
+
+        Ok(Statement {
+            position: function.position,
+            value: StatementKind::FunctionDeclaration {
+                name: ident,
+                parameters: params,
+                body,
+            },
+        })
+    }
+
+    fn parse_expression(&mut self) -> Result<Expression, String> {
+        self.parse_identifier_expression()
+    }
+
+    fn parse_identifier_expression(&mut self) -> Result<Expression, String> {
+        let Token {
+            typ,
+            position,
+            text,
+        } = self.expect(TokenType::Identifier)?;
+        if typ == TokenType::Identifier {
+            let s = text.to_string();
+            let id = self.agent.intern_string(s.as_ref());
+            Ok(Expression {
+                position: position,
+                value: ExpressionKind::Identifier(id),
+            })
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+impl<'a> Iterator for Parser<'a> {
+    type Item = Result<Statement, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_statement()
     }
 }
 
@@ -450,6 +701,135 @@ function
                 (TokenType::Integer, "1".to_string()),
                 (TokenType::Double, "1.2".to_string()),
             ]
+        );
+    }
+
+    #[test]
+    fn test_parser_let_declaration() {
+        let mut agent = Agent::new();
+        let name = agent.intern_string("something");
+        let someident = agent.intern_string("someident");
+        let input = "let something = someident;";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
+            vec![Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::LetDeclaration {
+                    name: Expression {
+                        position: Position { line: 1, column: 5 },
+                        value: ExpressionKind::Identifier(name),
+                    },
+                    value: Some(Expression {
+                        position: Position {
+                            line: 1,
+                            column: 17
+                        },
+                        value: ExpressionKind::Identifier(someident),
+                    }),
+                },
+            },],
+        );
+    }
+
+    #[test]
+    fn test_parser_function_declaration() {
+        let mut agent = Agent::new();
+        let name = agent.intern_string("test");
+        let ident_a = agent.intern_string("a");
+        let ident_b = agent.intern_string("b");
+        let ident_c = agent.intern_string("c");
+        let ident_hello = agent.intern_string("hello");
+
+        let input = "
+function test(a, b, c) {
+    let hello = b;
+}
+";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
+            vec![Statement {
+                position: Position { line: 2, column: 1 },
+                value: StatementKind::FunctionDeclaration {
+                    name: Expression {
+                        position: Position {
+                            line: 2,
+                            column: 10
+                        },
+                        value: ExpressionKind::Identifier(name),
+                    },
+                    parameters: vec![
+                        Expression {
+                            position: Position {
+                                line: 2,
+                                column: 15
+                            },
+                            value: ExpressionKind::Identifier(ident_a),
+                        },
+                        Expression {
+                            position: Position {
+                                line: 2,
+                                column: 18
+                            },
+                            value: ExpressionKind::Identifier(ident_b),
+                        },
+                        Expression {
+                            position: Position {
+                                line: 2,
+                                column: 21
+                            },
+                            value: ExpressionKind::Identifier(ident_c),
+                        },
+                    ],
+                    body: vec![Statement {
+                        position: Position { line: 3, column: 5 },
+                        value: StatementKind::LetDeclaration {
+                            name: Expression {
+                                position: Position { line: 3, column: 9 },
+                                value: ExpressionKind::Identifier(ident_hello),
+                            },
+                            value: Some(Expression {
+                                position: Position {
+                                    line: 3,
+                                    column: 17
+                                },
+                                value: ExpressionKind::Identifier(ident_b),
+                            }),
+                        },
+                    },],
+                },
+            },],
+        );
+    }
+
+    #[test]
+    fn test_missing_semicolon() {
+        let mut agent = Agent::new();
+        let input = "let something = someident";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Err("Expected Semicolon, found end of input".to_string()),],
+        );
+    }
+
+    #[test]
+    fn test_keyword_as_identifier() {
+        let mut agent = Agent::new();
+        let input = "let while = ok;";
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.next().unwrap(),
+            Err("Expected Identifier, got While at 1:5".to_string()),
         );
     }
 }
