@@ -85,8 +85,8 @@ run_symlinks() {
         rm "$autohook_stdout" "$autohook_stderr"
         return 1
     fi
-    tail -f "$autohook_stdout" > /dev/stdout &
-    tail -f "$autohook_stderr" > /dev/stderr &
+    tail -f -n +1 "$autohook_stdout" > /dev/stdout &
+    tail -f -n +1 "$autohook_stderr" > /dev/stderr &
 
     script_files=()
     while IFS='' read -r script_file; do
@@ -195,6 +195,7 @@ USAGE
 
 main() {
     calling_file=$(basename "$0")
+    trap '>/dev/null 2>&1 kill -- -$$ || :' SIGINT SIGTERM EXIT
     echo_debug "called by '$calling_file'"
     if [ "$calling_file" == "autohook.sh" ]; then
         if [ "$1" = '-h' ]; then
