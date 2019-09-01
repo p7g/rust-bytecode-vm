@@ -6,6 +6,7 @@ mod disassemble;
 mod interpreter;
 mod module;
 mod opcode;
+mod parser;
 mod value;
 
 use std::collections::HashMap;
