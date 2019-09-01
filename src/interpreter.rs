@@ -24,7 +24,7 @@ macro_rules! print_stack {
 }
 
 pub struct Interpreter<'a> {
-    agent: &'a mut Agent<'a>,
+    agent: &'a mut Agent,
     pub global: HashMap<usize, Value>,
     call_stack: Vec<usize>,
     stack: Vec<Value>,
@@ -34,11 +34,11 @@ pub struct Interpreter<'a> {
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(agent: &'a mut Agent<'a>) -> Interpreter<'a> {
+    pub fn new(agent: &'a mut Agent) -> Interpreter<'a> {
         Interpreter::with_global(agent, HashMap::new())
     }
 
-    pub fn with_global(agent: &'a mut Agent<'a>, global: HashMap<usize, Value>) -> Interpreter<'a> {
+    pub fn with_global(agent: &'a mut Agent, global: HashMap<usize, Value>) -> Interpreter<'a> {
         Interpreter {
             agent,
             global,
@@ -213,7 +213,7 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::ConstString => {
                     let idx = usize::from_le_bytes(next!(8));
-                    push!(Value::from(self.agent.string_table[idx]));
+                    push!(Value::from(self.agent.string_table[idx].as_ref()));
                 }
 
                 OpCode::Add => number_binop!("addition", i64::add, f64::add),
@@ -258,7 +258,7 @@ impl<'a> Interpreter<'a> {
                             ($arity:expr, $name:expr) => {{
                                 if num_args < $arity {
                                     let name = if let Some(name) = $name {
-                                        self.agent.string_table[*name]
+                                        self.agent.string_table[*name].as_ref()
                                     } else {
                                         "<anonymous>"
                                     };

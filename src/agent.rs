@@ -2,20 +2,20 @@ use crate::value::Upvalue;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct Agent<'a> {
-    pub string_table: Vec<&'a str>,
+pub struct Agent {
+    pub string_table: Vec<String>,
     pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
 }
 
-impl<'a> Agent<'a> {
-    pub fn new() -> Agent<'a> {
+impl Agent {
+    pub fn new() -> Agent {
         Agent {
             string_table: Vec::new(),
             upvalues: Vec::new(),
         }
     }
 
-    pub fn intern_string(&mut self, s: &'a str) -> usize {
+    pub fn intern_string(&mut self, s: &str) -> usize {
         if let Some(idx) = self
             .string_table
             .iter()
@@ -24,7 +24,7 @@ impl<'a> Agent<'a> {
             idx
         } else {
             let idx = self.string_table.len();
-            self.string_table.push(s);
+            self.string_table.push(String::from(s));
             idx
         }
     }
