@@ -1,3 +1,4 @@
+use std::iter::Peekable;
 use std::str::Chars;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -56,8 +57,7 @@ struct Lexer<'a> {
     line: usize,
     column: usize,
     input: &'a str,
-    chars: Chars<'a>,
-    peek: Option<char>,
+    chars: Peekable<Chars<'a>>,
 }
 
 impl<'a> Lexer<'a> {
@@ -67,8 +67,7 @@ impl<'a> Lexer<'a> {
             line: 1,
             column: 1,
             input,
-            chars: input.chars(),
-            peek: None,
+            chars: input.chars().peekable(),
         }
     }
 
@@ -81,8 +80,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn next_char(&mut self) -> Option<char> {
-        let next = self.peek.or_else(|| self.chars.next());
-        self.peek = None;
+        let next = self.chars.next();
         if next.is_some() {
             self.column += 1;
             self.position += 1;
@@ -90,17 +88,8 @@ impl<'a> Lexer<'a> {
         next
     }
 
-    fn peek_char(&mut self) -> Option<char> {
-        if self.peek.is_some() {
-            return self.peek;
-        }
-
-        let next = self.chars.next();
-        if next.is_some() {
-            self.peek = next;
-        }
-
-        next
+    fn peek_char(&mut self) -> Option<&char> {
+        self.chars.peek()
     }
 
     pub fn next(&mut self) -> Result<Option<Token<'a>>, String> {
@@ -129,7 +118,7 @@ impl<'a> Lexer<'a> {
             macro_rules! or2 {
                 ($char:expr, $typ:expr, $typ2:expr) => {{
                     if let Some(c) = self.peek_char() {
-                        if c == $char {
+                        if *c == $char {
                             self.next_char();
                             token!($typ2);
                         }
