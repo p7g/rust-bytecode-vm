@@ -25,29 +25,49 @@ enum TokenType {
     AndAnd,
     PipePipe,
     Semicolon,
+    Equal,
+    EqualEqual,
+    Bang,
+    BangEqual,
+    LessThan,
+    LessThanEqual,
+    GreaterThan,
+    GreaterThanEqual,
+    Comma,
 
     Return,
     Function,
     For,
+    If,
+    Else,
     While,
+    Break,
+    Continue,
     Let,
 }
 
-#[derive(Debug, PartialEq)]
-struct Token<'a> {
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct Position {
     line: usize,
     column: usize,
-    typ: TokenType,
-    text: &'a str,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(typ: TokenType, line: usize, column: usize, text: &'a str) -> Token {
+#[derive(Debug, PartialEq, Clone)]
+struct Token {
+    position: Position,
+    typ: TokenType,
+    text: String,
+}
+
+impl Token {
+    pub fn new<T>(typ: TokenType, line: usize, column: usize, text: T) -> Token
+    where
+        T: Into<String>,
+    {
         Token {
-            line,
-            column,
+            position: Position { line, column },
             typ,
-            text,
+            text: text.into(),
         }
     }
 }
@@ -71,14 +91,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn all(&mut self) -> Vec<Token<'a>> {
-        let mut tokens = Vec::new();
-        while let Ok(Some(token)) = self.next() {
-            tokens.push(token);
-        }
-        tokens
-    }
-
     fn next_char(&mut self) -> Option<char> {
         let next = self.chars.next();
         if next.is_some() {
@@ -92,14 +104,14 @@ impl<'a> Lexer<'a> {
         self.chars.peek()
     }
 
-    pub fn next(&mut self) -> Result<Option<Token<'a>>, String> {
+    pub fn next_token(&mut self) -> Option<Result<Token, String>> {
         let mut start = self.position;
         let mut start_line = self.line;
         let mut start_column = self.column;
 
         macro_rules! token {
             ($typ:expr) => {{
-                return Ok(Some(Token::new(
+                return Some(Ok(Token::new(
                     $typ,
                     start_line,
                     start_column,
@@ -110,7 +122,7 @@ impl<'a> Lexer<'a> {
 
         macro_rules! error {
             ($message:expr $(, $stuff:expr)* $(,)?) => {
-                Err(format!($message, $($stuff)*))
+                Some(Err(format!($message, $($stuff)*)))
             };
         }
 
@@ -161,9 +173,14 @@ impl<'a> Lexer<'a> {
                 ')' => token!(TokenType::RightParen),
                 '%' => token!(TokenType::Percent),
                 ';' => token!(TokenType::Semicolon),
+                ',' => token!(TokenType::Comma),
                 '*' => or2!('*', TokenType::Star, TokenType::StarStar),
                 '&' => or2!('&', TokenType::And, TokenType::AndAnd),
                 '|' => or2!('|', TokenType::Pipe, TokenType::PipePipe),
+                '=' => or2!('=', TokenType::Equal, TokenType::EqualEqual),
+                '<' => or2!('=', TokenType::LessThan, TokenType::LessThanEqual),
+                '>' => or2!('=', TokenType::GreaterThan, TokenType::GreaterThanEqual),
+                '!' => or2!('=', TokenType::Bang, TokenType::BangEqual),
 
                 '0'..='9' => {
                     let mut is_double = false;
@@ -208,6 +225,10 @@ impl<'a> Lexer<'a> {
                         "while" => token!(TokenType::While),
                         "function" => token!(TokenType::Function),
                         "let" => token!(TokenType::Let),
+                        "if" => token!(TokenType::If),
+                        "else" => token!(TokenType::Else),
+                        "break" => token!(TokenType::Break),
+                        "continue" => token!(TokenType::Continue),
                         _ => token!(TokenType::Identifier),
                     }
                 }
@@ -243,7 +264,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Ok(None)
+        None
     }
 }
 
@@ -262,11 +283,11 @@ mod tests {
 
     #[test]
     fn test_lexer_symbols() {
-        let input = "[ ] { } ( ) + - * ** / & && | || ^ % ;";
-        let mut lexer = Lexer::new(input);
+        let input = "[ ] { } ( ) + - * ** / & && | || ^ % ; < > <= >= = == ! != ,";
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![
                 Token::new(TokenType::LeftBracket, 1, 1, "["),
                 Token::new(TokenType::RightBracket, 1, 3, "]"),
@@ -286,6 +307,15 @@ mod tests {
                 Token::new(TokenType::Caret, 1, 34, "^"),
                 Token::new(TokenType::Percent, 1, 36, "%"),
                 Token::new(TokenType::Semicolon, 1, 38, ";"),
+                Token::new(TokenType::LessThan, 1, 40, "<"),
+                Token::new(TokenType::GreaterThan, 1, 42, ">"),
+                Token::new(TokenType::LessThanEqual, 1, 44, "<="),
+                Token::new(TokenType::GreaterThanEqual, 1, 47, ">="),
+                Token::new(TokenType::Equal, 1, 50, "="),
+                Token::new(TokenType::EqualEqual, 1, 52, "=="),
+                Token::new(TokenType::Bang, 1, 55, "!"),
+                Token::new(TokenType::BangEqual, 1, 57, "!="),
+                Token::new(TokenType::Comma, 1, 60, ","),
             ],
         );
     }
@@ -293,10 +323,10 @@ mod tests {
     #[test]
     fn test_integer() {
         let input = "123";
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![Token::new(TokenType::Integer, 1, 1, "123")]
         );
     }
@@ -304,10 +334,10 @@ mod tests {
     #[test]
     fn test_double() {
         let input = "1.23";
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![Token::new(TokenType::Double, 1, 1, "1.23")]
         );
     }
@@ -325,10 +355,10 @@ for
 let
 function
 ";
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![
                 Token::new(TokenType::Identifier, 2, 1, "abc"),
                 Token::new(TokenType::Identifier, 3, 1, "_a"),
@@ -346,10 +376,10 @@ function
     #[test]
     fn test_string() {
         let input = r#""this is a string""#;
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![Token::new(TokenType::String, 1, 1, r#""this is a string""#),]
         );
     }
@@ -357,10 +387,10 @@ function
     #[test]
     fn test_string_escapes() {
         let input = r#""so I says, \"this\nis\tan escaped string\"""#;
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.all(),
+            lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
             vec![Token::new(
                 TokenType::String,
                 1,
@@ -379,31 +409,29 @@ function
 
             print(testing());
         "#;
-        let mut lexer = Lexer::new(input);
+        let lexer = Lexer::new(input);
 
         assert_eq!(
             lexer
-                .all()
-                .iter()
-                .map(|tok| (tok.typ, tok.text))
-                .collect::<Vec<(TokenType, &str)>>(),
+                .filter_map(|tok| tok.ok().map(|tok| (tok.typ, tok.text)))
+                .collect::<Vec<_>>(),
             vec![
-                (TokenType::Function, "function"),
-                (TokenType::Identifier, "testing"),
-                (TokenType::LeftParen, "("),
-                (TokenType::RightParen, ")"),
-                (TokenType::LeftBrace, "{"),
-                (TokenType::Return, "return"),
-                (TokenType::String, r#""hello world""#),
-                (TokenType::Semicolon, ";"),
-                (TokenType::RightBrace, "}"),
-                (TokenType::Identifier, "print"),
-                (TokenType::LeftParen, "("),
-                (TokenType::Identifier, "testing"),
-                (TokenType::LeftParen, "("),
-                (TokenType::RightParen, ")"),
-                (TokenType::RightParen, ")"),
-                (TokenType::Semicolon, ";"),
+                (TokenType::Function, "function".to_string()),
+                (TokenType::Identifier, "testing".to_string()),
+                (TokenType::LeftParen, "(".to_string()),
+                (TokenType::RightParen, ")".to_string()),
+                (TokenType::LeftBrace, "{".to_string()),
+                (TokenType::Return, "return".to_string()),
+                (TokenType::String, r#""hello world""#.to_string()),
+                (TokenType::Semicolon, ";".to_string()),
+                (TokenType::RightBrace, "}".to_string()),
+                (TokenType::Identifier, "print".to_string()),
+                (TokenType::LeftParen, "(".to_string()),
+                (TokenType::Identifier, "testing".to_string()),
+                (TokenType::LeftParen, "(".to_string()),
+                (TokenType::RightParen, ")".to_string()),
+                (TokenType::RightParen, ")".to_string()),
+                (TokenType::Semicolon, ";".to_string()),
             ],
         );
     }
@@ -414,11 +442,13 @@ function
         let lexer = Lexer::new(input);
 
         assert_eq!(
-            lexer.map(|t| (t.typ, t.text)).collect::<Vec<_>>(),
+            lexer
+                .filter_map(|t| t.ok().map(|t| (t.typ, t.text)))
+                .collect::<Vec<_>>(),
             vec![
-                (TokenType::Identifier, "test"),
-                (TokenType::Integer, "1"),
-                (TokenType::Double, "1.2")
+                (TokenType::Identifier, "test".to_string()),
+                (TokenType::Integer, "1".to_string()),
+                (TokenType::Double, "1.2".to_string()),
             ]
         );
     }
