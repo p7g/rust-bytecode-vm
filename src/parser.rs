@@ -258,6 +258,14 @@ impl<'a> Lexer<'a> {
     }
 }
 
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next().unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,6 +416,21 @@ function
                 (TokenType::RightParen, ")"),
                 (TokenType::Semicolon, ";"),
             ],
+        );
+    }
+
+    #[test]
+    fn test_iterator() {
+        let input = "test 1 1.2";
+        let lexer = Lexer::new(input);
+
+        assert_eq!(
+            lexer.map(|t| (t.typ, t.text)).collect::<Vec<_>>(),
+            vec![
+                (TokenType::Identifier, "test"),
+                (TokenType::Integer, "1"),
+                (TokenType::Double, "1.2")
+            ]
         );
     }
 }
