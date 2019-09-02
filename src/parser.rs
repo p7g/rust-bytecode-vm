@@ -414,16 +414,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> ParseResult<Statement> {
-        while let Some(token) = self.peek()? {
+        if let Some(token) = self.peek()? {
             match token.typ {
-                TokenType::Let => return self.parse_let_declaration(),
-                TokenType::Function => return self.parse_function_declaration(),
-                TokenType::If => return self.parse_if_statement(),
-                _ => unimplemented!(),
+                TokenType::Let => self.parse_let_declaration(),
+                TokenType::Function => self.parse_function_declaration(),
+                TokenType::If => self.parse_if_statement(),
+                TokenType::While => self.parse_while_statement(),
+                TokenType::For => self.parse_for_statement(),
+                TokenType::Continue => self.parse_continue_statement(),
+                TokenType::Break => self.parse_break_statement(),
+                TokenType::Return => self.parse_return_statement(),
+                _ => self.parse_expression_statement(),
             }
+        } else {
+            unreachable!();
         }
-
-        unimplemented!()
     }
 
     fn parse_let_declaration(&mut self) -> ParseResult<Statement> {
@@ -533,8 +538,120 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_while_statement(&mut self) -> ParseResult<Statement> {
+        let while_ = self.expect(TokenType::While)?;
+        let predicate = self.parse_expression()?;
+
+        self.expect(TokenType::LeftBrace)?;
+
+        let mut body = Vec::new();
+        while !self.matches(TokenType::RightBrace)? {
+            body.push(self.parse_statement()?);
+        }
+
+        Ok(Statement {
+            position: while_.position,
+            value: StatementKind::WhileStatement { predicate, body },
+        })
+    }
+
+    fn parse_for_statement(&mut self) -> ParseResult<Statement> {
+        let for_ = self.expect(TokenType::For)?;
+
+        let initializer = if self.matches(TokenType::Semicolon)? {
+            None
+        } else {
+            Some(Box::new(self.parse_statement()?))
+        };
+
+        let predicate = if self.matches(TokenType::Semicolon)? {
+            None
+        } else {
+            let pred = self.parse_expression()?;
+            self.expect(TokenType::Semicolon)?;
+            Some(pred)
+        };
+
+        let increment = if self.matches(TokenType::LeftBrace)? {
+            None
+        } else {
+            let inc = self.parse_expression()?;
+            self.expect(TokenType::LeftBrace)?;
+            Some(inc)
+        };
+
+        let mut body = Vec::new();
+        while !self.matches(TokenType::RightBrace)? {
+            body.push(self.parse_statement()?);
+        }
+
+        Ok(Statement {
+            position: for_.position,
+            value: StatementKind::ForStatement {
+                initializer,
+                predicate,
+                increment,
+                body,
+            },
+        })
+    }
+
+    fn parse_return_statement(&mut self) -> ParseResult<Statement> {
+        let return_ = self.expect(TokenType::Return)?;
+
+        let expression = if self.matches(TokenType::Semicolon)? {
+            None
+        } else {
+            let expr = self.parse_expression()?;
+            self.expect(TokenType::Semicolon)?;
+            Some(expr)
+        };
+
+        Ok(Statement {
+            position: return_.position,
+            value: StatementKind::ReturnStatement(expression),
+        })
+    }
+
+    fn parse_continue_statement(&mut self) -> ParseResult<Statement> {
+        let continue_ = self.expect(TokenType::Continue)?;
+        self.expect(TokenType::Semicolon)?;
+        Ok(Statement {
+            position: continue_.position,
+            value: StatementKind::ContinueStatement,
+        })
+    }
+
+    fn parse_break_statement(&mut self) -> ParseResult<Statement> {
+        let break_ = self.expect(TokenType::Break)?;
+        self.expect(TokenType::Semicolon)?;
+        Ok(Statement {
+            position: break_.position,
+            value: StatementKind::BreakStatement,
+        })
+    }
+
+    fn parse_expression_statement(&mut self) -> ParseResult<Statement> {
+        let expression = self.parse_expression()?;
+        self.expect(TokenType::Semicolon)?;
+
+        Ok(Statement {
+            position: expression.position,
+            value: StatementKind::ExpressionStatement(expression),
+        })
+    }
+
     fn parse_expression(&mut self) -> ParseResult<Expression> {
-        self.parse_identifier_expression()
+        if let Some(token) = self.peek()? {
+            match token.typ {
+                TokenType::Identifier => self.parse_identifier_expression(),
+                TokenType::Integer => self.parse_integer_expression(),
+                TokenType::Double => self.parse_double_expression(),
+                _ => unimplemented!(),
+            }
+        } else {
+            unreachable!();
+        }
     }
 
     fn parse_identifier_expression(&mut self) -> ParseResult<Expression> {
@@ -553,6 +670,34 @@ impl<'a> Parser<'a> {
         } else {
             unreachable!();
         }
+    }
+
+    fn parse_integer_expression(&mut self) -> ParseResult<Expression> {
+        let number = self.expect(TokenType::Integer)?;
+
+        let intval = number
+            .text
+            .parse()
+            .expect("Failed to parse lexed integer literal");
+
+        Ok(Expression {
+            position: number.position,
+            value: ExpressionKind::Integer(intval),
+        })
+    }
+
+    fn parse_double_expression(&mut self) -> ParseResult<Expression> {
+        let number = self.expect(TokenType::Double)?;
+
+        let floatval: f64 = number
+            .text
+            .parse()
+            .expect("Failed to parse lexed integer literal");
+
+        Ok(Expression {
+            position: number.position,
+            value: ExpressionKind::Double(floatval),
+        })
     }
 }
 
@@ -1025,5 +1170,315 @@ if truee {
                 },
             },)],
         );
+    }
+
+    #[test]
+    fn test_while_statement() {
+        let mut agent = Agent::new();
+        let input = "while 1 { if 2 {} }";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::WhileStatement {
+                    predicate: Expression {
+                        position: Position { line: 1, column: 7 },
+                        value: ExpressionKind::Integer(1),
+                    },
+                    body: vec![Statement {
+                        position: Position {
+                            line: 1,
+                            column: 11
+                        },
+                        value: StatementKind::IfStatement {
+                            predicate: Expression {
+                                position: Position {
+                                    line: 1,
+                                    column: 14
+                                },
+                                value: ExpressionKind::Integer(2),
+                            },
+                            then_body: Vec::new(),
+                            else_body: None,
+                        },
+                    },],
+                },
+            }),],
+        );
+    }
+
+    #[test]
+    fn test_for_statement() {
+        let mut agent = Agent::new();
+        let input = "
+for ;; {}
+for let a;; {}
+for ; a; {}
+for let a; a; {}
+for ;; a {}
+for let a;; a {}
+for let a; a; a {}
+";
+        let ident_a = agent.intern_string("a");
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![
+                Ok(Statement {
+                    position: Position { line: 2, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: None,
+                        predicate: None,
+                        increment: None,
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 3, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: Some(Box::new(Statement {
+                            position: Position { line: 3, column: 5 },
+                            value: StatementKind::LetDeclaration {
+                                name: Expression {
+                                    position: Position { line: 3, column: 9 },
+                                    value: ExpressionKind::Identifier(ident_a),
+                                },
+                                value: None,
+                            },
+                        })),
+                        predicate: None,
+                        increment: None,
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 4, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: None,
+                        predicate: Some(Expression {
+                            position: Position { line: 4, column: 7 },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        increment: None,
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 5, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: Some(Box::new(Statement {
+                            position: Position { line: 5, column: 5 },
+                            value: StatementKind::LetDeclaration {
+                                name: Expression {
+                                    position: Position { line: 5, column: 9 },
+                                    value: ExpressionKind::Identifier(ident_a),
+                                },
+                                value: None,
+                            },
+                        })),
+                        predicate: Some(Expression {
+                            position: Position {
+                                line: 5,
+                                column: 12
+                            },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        increment: None,
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 6, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: None,
+                        predicate: None,
+                        increment: Some(Expression {
+                            position: Position { line: 6, column: 8 },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 7, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: Some(Box::new(Statement {
+                            position: Position { line: 7, column: 5 },
+                            value: StatementKind::LetDeclaration {
+                                name: Expression {
+                                    position: Position { line: 7, column: 9 },
+                                    value: ExpressionKind::Identifier(ident_a),
+                                },
+                                value: None,
+                            },
+                        })),
+                        predicate: None,
+                        increment: Some(Expression {
+                            position: Position {
+                                line: 7,
+                                column: 13
+                            },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        body: Vec::new(),
+                    },
+                }),
+                Ok(Statement {
+                    position: Position { line: 8, column: 1 },
+                    value: StatementKind::ForStatement {
+                        initializer: Some(Box::new(Statement {
+                            position: Position { line: 8, column: 5 },
+                            value: StatementKind::LetDeclaration {
+                                name: Expression {
+                                    position: Position { line: 8, column: 9 },
+                                    value: ExpressionKind::Identifier(ident_a),
+                                },
+                                value: None,
+                            },
+                        })),
+                        predicate: Some(Expression {
+                            position: Position {
+                                line: 8,
+                                column: 12
+                            },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        increment: Some(Expression {
+                            position: Position {
+                                line: 8,
+                                column: 15
+                            },
+                            value: ExpressionKind::Identifier(ident_a),
+                        }),
+                        body: Vec::new(),
+                    },
+                }),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_continue_statement() {
+        let mut agent = Agent::new();
+        let input = "continue;";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::ContinueStatement,
+            }),],
+        );
+    }
+
+    #[test]
+    fn test_break_statement() {
+        let mut agent = Agent::new();
+        let input = "break;";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::BreakStatement,
+            }),],
+        );
+    }
+
+    #[test]
+    fn test_return_statement() {
+        let mut agent = Agent::new();
+        let input = "
+return;
+return 1;
+";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![
+                Ok(Statement {
+                    position: Position { line: 2, column: 1 },
+                    value: StatementKind::ReturnStatement(None),
+                }),
+                Ok(Statement {
+                    position: Position { line: 3, column: 1 },
+                    value: StatementKind::ReturnStatement(Some(Expression {
+                        position: Position { line: 3, column: 8 },
+                        value: ExpressionKind::Integer(1),
+                    })),
+                }),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_expression_statement() {
+        let mut agent = Agent::new();
+        let input = "123;";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::ExpressionStatement(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Integer(123),
+                }),
+            }),],
+        );
+    }
+
+    macro_rules! test_expression {
+        ($input:expr, $result:expr) => {{
+            let mut agent = Agent::new();
+            test_expression!($input, $result, agent);
+        }};
+        ($input:expr, $result:expr, $agent:expr) => {{
+            let mut agent = $agent;
+            let input = $input;
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+
+            assert_eq!(
+                parser.collect::<Vec<_>>(),
+                vec![Ok(Statement {
+                    position: Position { line: 1, column: 1 },
+                    value: StatementKind::ExpressionStatement(Expression {
+                        position: Position { line: 1, column: 1 },
+                        value: $result,
+                    }),
+                }),],
+            );
+        }};
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let mut agent = Agent::new();
+        let ident_a = agent.intern_string("a");
+        test_expression!("a;", ExpressionKind::Identifier(ident_a), agent);
+    }
+
+    #[test]
+    fn test_integer_expression() {
+        test_expression!("123;", ExpressionKind::Integer(123));
+    }
+
+    #[test]
+    fn test_double_expression() {
+        test_expression!("1.23;", ExpressionKind::Double(1.23));
     }
 }
