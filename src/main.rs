@@ -1,3 +1,5 @@
+#![allow(dead_code)] // FIXME: enable this again once things are stable
+
 mod agent;
 #[macro_use]
 mod bytecode;
