@@ -286,34 +286,34 @@ struct Statement {
 
 #[derive(Debug, PartialEq, Clone)]
 enum StatementKind {
-    FunctionDeclaration {
+    Function {
         name: Expression,
         parameters: Vec<Expression>,
         body: Vec<Statement>,
     },
-    LetDeclaration {
+    Let {
         name: Expression,
         value: Option<Expression>,
     },
-    IfStatement {
+    If {
         predicate: Expression,
         then_body: Vec<Statement>,
         else_body: Option<Vec<Statement>>,
     },
-    WhileStatement {
+    While {
         predicate: Expression,
         body: Vec<Statement>,
     },
-    ForStatement {
+    For {
         initializer: Option<Box<Statement>>,
         predicate: Option<Expression>,
         increment: Option<Expression>,
         body: Vec<Statement>,
     },
-    BreakStatement,
-    ContinueStatement,
-    ReturnStatement(Option<Expression>),
-    ExpressionStatement(Expression),
+    Break,
+    Continue,
+    Return(Option<Expression>),
+    Expression(Expression),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -445,7 +445,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: let_.position,
-            value: StatementKind::LetDeclaration { name: ident, value },
+            value: StatementKind::Let { name: ident, value },
         })
     }
 
@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: function.position,
-            value: StatementKind::FunctionDeclaration {
+            value: StatementKind::Function {
                 name: ident,
                 parameters: params,
                 body,
@@ -535,7 +535,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: if_.position,
-            value: StatementKind::IfStatement {
+            value: StatementKind::If {
                 predicate,
                 then_body,
                 else_body,
@@ -556,7 +556,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: while_.position,
-            value: StatementKind::WhileStatement { predicate, body },
+            value: StatementKind::While { predicate, body },
         })
     }
 
@@ -592,7 +592,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: for_.position,
-            value: StatementKind::ForStatement {
+            value: StatementKind::For {
                 initializer,
                 predicate,
                 increment,
@@ -614,7 +614,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: return_.position,
-            value: StatementKind::ReturnStatement(expression),
+            value: StatementKind::Return(expression),
         })
     }
 
@@ -623,7 +623,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenType::Semicolon)?;
         Ok(Statement {
             position: continue_.position,
-            value: StatementKind::ContinueStatement,
+            value: StatementKind::Continue,
         })
     }
 
@@ -632,7 +632,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenType::Semicolon)?;
         Ok(Statement {
             position: break_.position,
-            value: StatementKind::BreakStatement,
+            value: StatementKind::Break,
         })
     }
 
@@ -642,7 +642,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             position: expression.position,
-            value: StatementKind::ExpressionStatement(expression),
+            value: StatementKind::Expression(expression),
         })
     }
 
@@ -904,7 +904,7 @@ function
             parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
             vec![Statement {
                 position: Position { line: 1, column: 1 },
-                value: StatementKind::LetDeclaration {
+                value: StatementKind::Let {
                     name: Expression {
                         position: Position { line: 1, column: 5 },
                         value: ExpressionKind::Identifier(name),
@@ -942,7 +942,7 @@ function test(a, b, c) {
             parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
             vec![Statement {
                 position: Position { line: 2, column: 1 },
-                value: StatementKind::FunctionDeclaration {
+                value: StatementKind::Function {
                     name: Expression {
                         position: Position {
                             line: 2,
@@ -975,7 +975,7 @@ function test(a, b, c) {
                     ],
                     body: vec![Statement {
                         position: Position { line: 3, column: 5 },
-                        value: StatementKind::LetDeclaration {
+                        value: StatementKind::Let {
                             name: Expression {
                                 position: Position { line: 3, column: 9 },
                                 value: ExpressionKind::Identifier(ident_hello),
@@ -1019,7 +1019,7 @@ function test(
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 2, column: 1 },
-                value: StatementKind::FunctionDeclaration {
+                value: StatementKind::Function {
                     name: Expression {
                         position: Position {
                             line: 2,
@@ -1098,14 +1098,14 @@ if truee {
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 2, column: 1 },
-                value: StatementKind::IfStatement {
+                value: StatementKind::If {
                     predicate: Expression {
                         position: Position { line: 2, column: 4 },
                         value: ExpressionKind::Identifier(ident_true),
                     },
                     then_body: vec![Statement {
                         position: Position { line: 3, column: 5 },
-                        value: StatementKind::LetDeclaration {
+                        value: StatementKind::Let {
                             name: Expression {
                                 position: Position { line: 3, column: 9 },
                                 value: ExpressionKind::Identifier(ident_test),
@@ -1138,14 +1138,14 @@ if truee {
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 2, column: 1 },
-                value: StatementKind::IfStatement {
+                value: StatementKind::If {
                     predicate: Expression {
                         position: Position { line: 2, column: 4 },
                         value: ExpressionKind::Identifier(ident_true),
                     },
                     then_body: vec![Statement {
                         position: Position { line: 3, column: 5 },
-                        value: StatementKind::LetDeclaration {
+                        value: StatementKind::Let {
                             name: Expression {
                                 position: Position { line: 3, column: 9 },
                                 value: ExpressionKind::Identifier(ident_test),
@@ -1155,7 +1155,7 @@ if truee {
                     },],
                     else_body: Some(vec![Statement {
                         position: Position { line: 5, column: 5 },
-                        value: StatementKind::FunctionDeclaration {
+                        value: StatementKind::Function {
                             name: Expression {
                                 position: Position {
                                     line: 5,
@@ -1191,14 +1191,14 @@ if truee {
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 2, column: 1 },
-                value: StatementKind::IfStatement {
+                value: StatementKind::If {
                     predicate: Expression {
                         position: Position { line: 2, column: 4 },
                         value: ExpressionKind::Identifier(ident_true),
                     },
                     then_body: vec![Statement {
                         position: Position { line: 3, column: 5 },
-                        value: StatementKind::LetDeclaration {
+                        value: StatementKind::Let {
                             name: Expression {
                                 position: Position { line: 3, column: 9 },
                                 value: ExpressionKind::Identifier(ident_test),
@@ -1208,7 +1208,7 @@ if truee {
                     }],
                     else_body: Some(vec![Statement {
                         position: Position { line: 4, column: 8 },
-                        value: StatementKind::IfStatement {
+                        value: StatementKind::If {
                             predicate: Expression {
                                 position: Position {
                                     line: 4,
@@ -1218,7 +1218,7 @@ if truee {
                             },
                             then_body: vec![Statement {
                                 position: Position { line: 5, column: 5 },
-                                value: StatementKind::FunctionDeclaration {
+                                value: StatementKind::Function {
                                     name: Expression {
                                         position: Position {
                                             line: 5,
@@ -1249,7 +1249,7 @@ if truee {
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 1, column: 1 },
-                value: StatementKind::WhileStatement {
+                value: StatementKind::While {
                     predicate: Expression {
                         position: Position { line: 1, column: 7 },
                         value: ExpressionKind::Integer(1),
@@ -1259,7 +1259,7 @@ if truee {
                             line: 1,
                             column: 11
                         },
-                        value: StatementKind::IfStatement {
+                        value: StatementKind::If {
                             predicate: Expression {
                                 position: Position {
                                     line: 1,
@@ -1297,7 +1297,7 @@ for let a; a; a {}
             vec![
                 Ok(Statement {
                     position: Position { line: 2, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: None,
                         predicate: None,
                         increment: None,
@@ -1306,10 +1306,10 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 3, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: Some(Box::new(Statement {
                             position: Position { line: 3, column: 5 },
-                            value: StatementKind::LetDeclaration {
+                            value: StatementKind::Let {
                                 name: Expression {
                                     position: Position { line: 3, column: 9 },
                                     value: ExpressionKind::Identifier(ident_a),
@@ -1324,7 +1324,7 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 4, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: None,
                         predicate: Some(Expression {
                             position: Position { line: 4, column: 7 },
@@ -1336,10 +1336,10 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 5, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: Some(Box::new(Statement {
                             position: Position { line: 5, column: 5 },
-                            value: StatementKind::LetDeclaration {
+                            value: StatementKind::Let {
                                 name: Expression {
                                     position: Position { line: 5, column: 9 },
                                     value: ExpressionKind::Identifier(ident_a),
@@ -1360,7 +1360,7 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 6, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: None,
                         predicate: None,
                         increment: Some(Expression {
@@ -1372,10 +1372,10 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 7, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: Some(Box::new(Statement {
                             position: Position { line: 7, column: 5 },
-                            value: StatementKind::LetDeclaration {
+                            value: StatementKind::Let {
                                 name: Expression {
                                     position: Position { line: 7, column: 9 },
                                     value: ExpressionKind::Identifier(ident_a),
@@ -1396,10 +1396,10 @@ for let a; a; a {}
                 }),
                 Ok(Statement {
                     position: Position { line: 8, column: 1 },
-                    value: StatementKind::ForStatement {
+                    value: StatementKind::For {
                         initializer: Some(Box::new(Statement {
                             position: Position { line: 8, column: 5 },
-                            value: StatementKind::LetDeclaration {
+                            value: StatementKind::Let {
                                 name: Expression {
                                     position: Position { line: 8, column: 9 },
                                     value: ExpressionKind::Identifier(ident_a),
@@ -1439,7 +1439,7 @@ for let a; a; a {}
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 1, column: 1 },
-                value: StatementKind::ContinueStatement,
+                value: StatementKind::Continue,
             }),],
         );
     }
@@ -1455,7 +1455,7 @@ for let a; a; a {}
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 1, column: 1 },
-                value: StatementKind::BreakStatement,
+                value: StatementKind::Break,
             }),],
         );
     }
@@ -1475,11 +1475,11 @@ return 1;
             vec![
                 Ok(Statement {
                     position: Position { line: 2, column: 1 },
-                    value: StatementKind::ReturnStatement(None),
+                    value: StatementKind::Return(None),
                 }),
                 Ok(Statement {
                     position: Position { line: 3, column: 1 },
-                    value: StatementKind::ReturnStatement(Some(Expression {
+                    value: StatementKind::Return(Some(Expression {
                         position: Position { line: 3, column: 8 },
                         value: ExpressionKind::Integer(1),
                     })),
@@ -1499,7 +1499,7 @@ return 1;
             parser.collect::<Vec<_>>(),
             vec![Ok(Statement {
                 position: Position { line: 1, column: 1 },
-                value: StatementKind::ExpressionStatement(Expression {
+                value: StatementKind::Expression(Expression {
                     position: Position { line: 1, column: 1 },
                     value: ExpressionKind::Integer(123),
                 }),
@@ -1522,7 +1522,7 @@ return 1;
                 parser.collect::<Vec<_>>(),
                 vec![Ok(Statement {
                     position: Position { line: 1, column: 1 },
-                    value: StatementKind::ExpressionStatement(Expression {
+                    value: StatementKind::Expression(Expression {
                         position: Position { line: 1, column: 1 },
                         value: $result,
                     }),
