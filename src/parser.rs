@@ -642,7 +642,7 @@ impl<'a> Parser<'a> {
                 TokenType::Identifier => self.parse_identifier_expression(),
                 TokenType::Integer => self.parse_integer_expression(),
                 TokenType::Double => self.parse_double_expression(),
-                _ => unimplemented!(),
+                _ => panic!(format!("Saw {:?} when parsing expression", token)),
             }
         } else {
             unreachable!();
