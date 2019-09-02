@@ -9,6 +9,7 @@ enum TokenType {
     Integer,
     Double,
     String,
+    Null,
     LeftBracket,
     RightBracket,
     LeftBrace,
@@ -231,6 +232,7 @@ impl<'a> Lexer<'a> {
                         "else" => token!(TokenType::Else),
                         "break" => token!(TokenType::Break),
                         "continue" => token!(TokenType::Continue),
+                        "null" => token!(TokenType::Null),
                         _ => token!(TokenType::Identifier),
                     }
                 }
