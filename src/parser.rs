@@ -474,14 +474,9 @@ impl<'a> Parser<'a> {
                     param.position.line, param.position.column
                 ));
             }
-            if let Some(Token {
-                typ: TokenType::RightParen,
-                ..
-            }) = self.peek()?
-            {
-                self.matches(TokenType::Comma)?;
-            } else {
-                self.expect(TokenType::Comma)?;
+            if !self.matches(TokenType::Comma)? {
+                self.expect(TokenType::RightParen)?;
+                break;
             }
         }
 
@@ -986,6 +981,67 @@ function test(a, b, c) {
                     },],
                 },
             },],
+        );
+    }
+
+    #[test]
+    fn test_parameter_list_trailing_comma() {
+        let mut agent = Agent::new();
+        let input = "
+function test(
+    this,
+    func,
+    has,
+    many,
+    parameters,
+) {}
+";
+        let ident_test = agent.intern_string("test");
+        let ident_this = agent.intern_string("this");
+        let ident_func = agent.intern_string("func");
+        let ident_has = agent.intern_string("has");
+        let ident_many = agent.intern_string("many");
+        let ident_parameters = agent.intern_string("parameters");
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 2, column: 1 },
+                value: StatementKind::FunctionDeclaration {
+                    name: Expression {
+                        position: Position {
+                            line: 2,
+                            column: 10
+                        },
+                        value: ExpressionKind::Identifier(ident_test),
+                    },
+                    parameters: vec![
+                        Expression {
+                            position: Position { line: 3, column: 5 },
+                            value: ExpressionKind::Identifier(ident_this),
+                        },
+                        Expression {
+                            position: Position { line: 4, column: 5 },
+                            value: ExpressionKind::Identifier(ident_func),
+                        },
+                        Expression {
+                            position: Position { line: 5, column: 5 },
+                            value: ExpressionKind::Identifier(ident_has),
+                        },
+                        Expression {
+                            position: Position { line: 6, column: 5 },
+                            value: ExpressionKind::Identifier(ident_many),
+                        },
+                        Expression {
+                            position: Position { line: 7, column: 5 },
+                            value: ExpressionKind::Identifier(ident_parameters),
+                        },
+                    ],
+                    body: Vec::new(),
+                },
+            }),],
         );
     }
 
