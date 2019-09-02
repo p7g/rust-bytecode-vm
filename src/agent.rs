@@ -19,7 +19,7 @@ impl Agent {
         if let Some(idx) = self
             .string_table
             .iter()
-            .position(|ref interned| *interned == &s)
+            .position(|ref interned| *interned == s)
         {
             idx
         } else {

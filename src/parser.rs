@@ -510,7 +510,7 @@ impl<'a> Parser<'a> {
             let s = text.to_string();
             let id = self.agent.intern_string(s.as_ref());
             Ok(Expression {
-                position: position,
+                position,
                 value: ExpressionKind::Identifier(id),
             })
         } else {

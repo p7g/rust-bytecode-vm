@@ -33,7 +33,7 @@ impl Bytecode {
 
     pub fn address_of(mut self, name: &'static str) -> Bytecode {
         if self.label_addresses.contains_key(name) {
-            let address = { self.label_addresses.get(name).unwrap().clone() };
+            let address = { *self.label_addresses.get(name).unwrap() };
             self.usize(address)
         } else {
             let current_address = self.instructions.len();

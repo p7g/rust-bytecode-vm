@@ -403,9 +403,9 @@ mod tests {
 
     #[test]
     fn test_int_equality() {
-        let a = Value::from(123123);
-        let b = Value::from(123123);
-        let c = Value::from(432432);
+        let a = Value::from(123_123);
+        let b = Value::from(123_123);
+        let c = Value::from(432_432);
 
         assert_eq!(a, b);
         assert_ne!(a, c);

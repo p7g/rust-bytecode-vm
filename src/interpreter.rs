@@ -160,7 +160,8 @@ impl<'a> Interpreter<'a> {
 
                 push!(if let Value::Integer(a) = a {
                     if let Value::Integer(b) = b {
-                        Value::from($intop(a, ($bconvert)(b)?))
+                        let converter = $bconvert;
+                        Value::from($intop(a, converter(b)?))
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a as f64, b))
                     } else {
