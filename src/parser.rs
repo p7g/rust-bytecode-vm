@@ -834,7 +834,7 @@ function
     }
 
     #[test]
-    fn test_language_snippet() {
+    fn test_lexing_language_snippet() {
         let input = r#"
             function testing() {
                 return "hello world";
@@ -870,7 +870,7 @@ function
     }
 
     #[test]
-    fn test_iterator() {
+    fn test_lexer_iterator() {
         let input = "test 1 1.2";
         let lexer = Lexer::new(input);
 
@@ -887,7 +887,7 @@ function
     }
 
     #[test]
-    fn test_parser_let_declaration() {
+    fn test_let_declaration() {
         let mut agent = Agent::new();
         let name = agent.intern_string("something");
         let someident = agent.intern_string("someident");
@@ -917,7 +917,7 @@ function
     }
 
     #[test]
-    fn test_parser_function_declaration() {
+    fn test_function_declaration() {
         let mut agent = Agent::new();
         let name = agent.intern_string("test");
         let ident_a = agent.intern_string("a");
@@ -1443,7 +1443,7 @@ return 1;
 
     macro_rules! test_expression {
         ($input:expr, $result:expr) => {{
-            let mut agent = Agent::new();
+            let agent = Agent::new();
             test_expression!($input, $result, agent);
         }};
         ($input:expr, $result:expr, $agent:expr) => {{
