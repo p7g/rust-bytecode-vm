@@ -418,6 +418,7 @@ impl<'a> Parser<'a> {
             match token.typ {
                 TokenType::Let => return self.parse_let_declaration(),
                 TokenType::Function => return self.parse_function_declaration(),
+                TokenType::If => return self.parse_if_statement(),
                 _ => unimplemented!(),
             }
         }
@@ -492,6 +493,37 @@ impl<'a> Parser<'a> {
                 name: ident,
                 parameters: params,
                 body,
+            },
+        })
+    }
+
+    fn parse_if_statement(&mut self) -> ParseResult<Statement> {
+        let if_ = self.expect(TokenType::If)?;
+        let predicate = self.parse_expression()?;
+        self.expect(TokenType::LeftBrace)?;
+
+        let mut then_body = Vec::new();
+        while !self.matches(TokenType::RightBrace)? {
+            then_body.push(self.parse_statement()?);
+        }
+
+        let else_body = if self.matches(TokenType::Else)? {
+            self.expect(TokenType::LeftBrace)?;
+            let mut stmts = Vec::new();
+            while !self.matches(TokenType::RightBrace)? {
+                stmts.push(self.parse_statement()?);
+            }
+            Some(stmts)
+        } else {
+            None
+        };
+
+        Ok(Statement {
+            position: if_.position,
+            value: StatementKind::IfStatement {
+                predicate,
+                then_body,
+                else_body,
             },
         })
     }
@@ -830,6 +862,97 @@ function test(a, b, c) {
         assert_eq!(
             parser.next().unwrap(),
             Err("Expected Identifier, got While at 1:5".to_string()),
+        );
+    }
+
+    #[test]
+    fn test_if_statement() {
+        let mut agent = Agent::new();
+        let input = "
+if truee {
+    let test;
+}
+";
+        let ident_true = agent.intern_string("truee");
+        let ident_test = agent.intern_string("test");
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 2, column: 1 },
+                value: StatementKind::IfStatement {
+                    predicate: Expression {
+                        position: Position { line: 2, column: 4 },
+                        value: ExpressionKind::Identifier(ident_true),
+                    },
+                    then_body: vec![Statement {
+                        position: Position { line: 3, column: 5 },
+                        value: StatementKind::LetDeclaration {
+                            name: Expression {
+                                position: Position { line: 3, column: 9 },
+                                value: ExpressionKind::Identifier(ident_test),
+                            },
+                            value: None,
+                        },
+                    },],
+                    else_body: None,
+                },
+            },)],
+        );
+    }
+
+    #[test]
+    fn test_if_else_statement() {
+        let mut agent = Agent::new();
+        let input = "
+if truee {
+    let test;
+} else {
+    function test() {}
+}
+";
+        let ident_true = agent.intern_string("truee");
+        let ident_test = agent.intern_string("test");
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 2, column: 1 },
+                value: StatementKind::IfStatement {
+                    predicate: Expression {
+                        position: Position { line: 2, column: 4 },
+                        value: ExpressionKind::Identifier(ident_true),
+                    },
+                    then_body: vec![Statement {
+                        position: Position { line: 3, column: 5 },
+                        value: StatementKind::LetDeclaration {
+                            name: Expression {
+                                position: Position { line: 3, column: 9 },
+                                value: ExpressionKind::Identifier(ident_test),
+                            },
+                            value: None,
+                        },
+                    },],
+                    else_body: Some(vec![Statement {
+                        position: Position { line: 5, column: 5 },
+                        value: StatementKind::FunctionDeclaration {
+                            name: Expression {
+                                position: Position {
+                                    line: 5,
+                                    column: 14
+                                },
+                                value: ExpressionKind::Identifier(ident_test),
+                            },
+                            parameters: Vec::new(),
+                            body: Vec::new(),
+                        },
+                    },]),
+                },
+            },)],
         );
     }
 }
