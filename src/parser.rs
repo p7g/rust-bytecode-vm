@@ -449,6 +449,26 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_list<T>(
+        &mut self,
+        terminator: TokenType,
+        separator: TokenType,
+        parse: fn(&mut Self) -> ParseResult<T>,
+        validate: fn(&T) -> ParseResult<()>,
+    ) -> ParseResult<Vec<T>> {
+        let mut items = Vec::new();
+        while !self.matches(terminator)? {
+            let item = parse(self)?;
+            validate(&item)?;
+            items.push(item);
+            if !self.matches(separator)? {
+                self.expect(terminator)?;
+                break;
+            }
+        }
+        Ok(items)
+    }
+
     fn parse_function_declaration(&mut self) -> ParseResult<Statement> {
         let function = self.expect(TokenType::Function)?;
         let ident = self.parse_expression()?;
@@ -463,22 +483,12 @@ impl<'a> Parser<'a> {
 
         self.expect(TokenType::LeftParen)?;
 
-        let mut params = Vec::new();
-        while !self.matches(TokenType::RightParen)? {
-            let param = self.parse_expression()?;
-            if let ExpressionKind::Identifier(_) = param.value {
-                params.push(param);
-            } else {
-                return Err(format!(
-                    "Expected identifier at {}:{}",
-                    param.position.line, param.position.column
-                ));
-            }
-            if !self.matches(TokenType::Comma)? {
-                self.expect(TokenType::RightParen)?;
-                break;
-            }
-        }
+        let params = self.parse_list(
+            TokenType::RightParen,
+            TokenType::Comma,
+            Self::parse_identifier_expression,
+            |_| Ok(()),
+        )?;
 
         let mut body = Vec::new();
 
