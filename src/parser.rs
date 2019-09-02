@@ -284,6 +284,7 @@ struct Statement {
     value: StatementKind,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq, Clone)]
 enum StatementKind {
     Function {

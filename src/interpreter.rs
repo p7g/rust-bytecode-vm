@@ -50,6 +50,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value, String> {
         if cfg!(vm_debug) {
             disassemble(self.agent, &code_object)?;
