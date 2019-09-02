@@ -353,7 +353,7 @@ enum ExpressionKind {
     Index(Box<Expression>, Box<Expression>),
 }
 
-pub type ParseResult = Result<Statement, String>;
+pub type ParseResult<T> = Result<T, String>;
 
 struct Parser<'a> {
     agent: &'a mut Agent,
@@ -368,7 +368,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn next_statement(&mut self) -> Option<ParseResult> {
+    pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
         match self.peek() {
             Ok(Some(_)) => Some(self.parse_statement()),
             Err(msg) => Some(Err(msg.clone())),
@@ -376,11 +376,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn next_token(&mut self) -> Result<Option<Token>, String> {
+    fn next_token(&mut self) -> ParseResult<Option<Token>> {
         self.lexer.next().transpose()
     }
 
-    fn expect(&mut self, expected: TokenType) -> Result<Token, String> {
+    fn expect(&mut self, expected: TokenType) -> ParseResult<Token> {
         match &self.next_token()? {
             Some(tok) if tok.typ == expected => Ok(tok.clone()),
             Some(Token {
@@ -395,7 +395,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek(&mut self) -> Result<Option<&Token>, String> {
+    fn peek(&mut self) -> ParseResult<Option<&Token>> {
         match self.lexer.peek() {
             Some(&Ok(ref tok)) => Ok(Some(tok)),
             Some(Err(msg)) => Err(msg.clone()),
@@ -403,7 +403,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn matches(&mut self, expected: TokenType) -> Result<bool, String> {
+    fn matches(&mut self, expected: TokenType) -> ParseResult<bool> {
         match self.peek()? {
             Some(&Token { typ, .. }) if typ == expected => {
                 self.expect(expected)?;
@@ -413,7 +413,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statement(&mut self) -> ParseResult {
+    fn parse_statement(&mut self) -> ParseResult<Statement> {
         while let Some(token) = self.peek()? {
             match token.typ {
                 TokenType::Let => return self.parse_let_declaration(),
@@ -425,7 +425,7 @@ impl<'a> Parser<'a> {
         unimplemented!()
     }
 
-    fn parse_let_declaration(&mut self) -> ParseResult {
+    fn parse_let_declaration(&mut self) -> ParseResult<Statement> {
         let let_ = self.expect(TokenType::Let)?;
         let ident = self.parse_identifier_expression()?;
 
@@ -443,7 +443,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_declaration(&mut self) -> ParseResult {
+    fn parse_function_declaration(&mut self) -> ParseResult<Statement> {
         let function = self.expect(TokenType::Function)?;
         let ident = self.parse_expression()?;
 
@@ -496,11 +496,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_expression(&mut self) -> Result<Expression, String> {
+    fn parse_expression(&mut self) -> ParseResult<Expression> {
         self.parse_identifier_expression()
     }
 
-    fn parse_identifier_expression(&mut self) -> Result<Expression, String> {
+    fn parse_identifier_expression(&mut self) -> ParseResult<Expression> {
         let Token {
             typ,
             position,
@@ -520,7 +520,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Iterator for Parser<'a> {
-    type Item = Result<Statement, String>;
+    type Item = ParseResult<Statement>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_statement()
