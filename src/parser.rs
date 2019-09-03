@@ -82,6 +82,7 @@ impl Token {
 
     pub fn lbp(&self) -> usize {
         match self.typ {
+            TokenType::Identifier => 0,
             TokenType::Integer => 0,
             TokenType::Double => 0,
             TokenType::String => 0,
