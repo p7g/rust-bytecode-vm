@@ -711,6 +711,7 @@ impl<'a> Parser<'a> {
             TokenType::Null => self.parse_null_expression(token),
             TokenType::LeftParen => self.parse_parenthesized_expression(token),
             TokenType::LeftBracket => self.parse_array_expression(token),
+            TokenType::Minus | TokenType::Bang => self.parse_unary_expression(token),
 
             _ => Err(format!(
                 "Unexpected token {:?} at {}",
@@ -756,8 +757,8 @@ impl<'a> Parser<'a> {
         }
 
         let mut t = some!(self.next_token()?);
-        let mut token = self.peek()?.cloned();
         let mut left = self.nud(t)?;
+        let mut token = self.peek()?.cloned();
 
         while token.is_some() && rbp < token.unwrap().lbp() {
             t = some!(self.next_token()?);
@@ -833,6 +834,15 @@ impl<'a> Parser<'a> {
                 Self::parse_expression,
                 |_| Ok(()),
             )?),
+        })
+    }
+
+    fn parse_unary_expression(&mut self, op: Token) -> ParseResult<Expression> {
+        let right = self.parse_expression_inner(op.rbp())?;
+
+        Ok(Expression {
+            position: op.position,
+            value: ExpressionKind::UnaryOperation(op.typ, Box::new(right)),
         })
     }
 
