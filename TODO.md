@@ -1,0 +1,23 @@
+# TODO
+
+- [ ] test `led` expression parsing
+    - associativity
+    - precedence
+- [ ] add function expression
+- [ ] replace string escapes with actual characters in lexer
+- [ ] write compiler (AST -> bytecode)
+- [ ] import/export
+    - decide: happens at runtime (by VM) or before
+- [ ] standard library stuff
+    - dynamic array
+    - hashmap
+    - string manipulation functions
+    - regular expressions
+    - networking
+- [ ] async/await
+    - promises or futures? (what's the difference?)
+    - tokio or mio or something
+- [ ] add optimization pass before bytecode generation
+    - constant folding
+    - dead code elimination?
+    - other kinds of optimizations I know nothing about
