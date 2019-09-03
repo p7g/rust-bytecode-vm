@@ -55,6 +55,12 @@ struct Position {
     column: usize,
 }
 
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line, self.column)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 struct Token {
     position: Position,
@@ -71,6 +77,52 @@ impl Token {
             position: Position { line, column },
             typ,
             text: text.into(),
+        }
+    }
+
+    pub fn lbp(&self) -> usize {
+        match self.typ {
+            TokenType::Integer => 0,
+            TokenType::Double => 0,
+            TokenType::String => 0,
+            TokenType::Null => 0,
+
+            TokenType::Equal => 1,
+            TokenType::PipePipe => 2,
+            TokenType::AndAnd => 3,
+            TokenType::EqualEqual => 4,
+            TokenType::BangEqual => 4,
+            TokenType::LessThan => 5,
+            TokenType::LessThanEqual => 5,
+            TokenType::GreaterThan => 5,
+            TokenType::GreaterThanEqual => 5,
+            TokenType::Plus => 6,
+            TokenType::Minus => 6,
+            TokenType::Star => 7,
+            TokenType::Slash => 8,
+            TokenType::Percent => 9,
+            TokenType::StarStar => 10,
+            TokenType::LeftParen => 12,
+            TokenType::LeftBracket => 12,
+
+            TokenType::Semicolon => 0,
+            TokenType::RightParen => 0,
+            TokenType::RightBracket => 0,
+            TokenType::LeftBrace => 0,
+            TokenType::Comma => 0,
+
+            _ => panic!("Trying to get lbp of {:?}", self),
+        }
+    }
+
+    pub fn rbp(&self) -> usize {
+        match self.typ {
+            TokenType::LeftParen => 0,
+            TokenType::LeftBracket => 0,
+            TokenType::Bang => 11,
+            TokenType::Minus => 11,
+
+            _ => unreachable!(),
         }
     }
 }
@@ -319,21 +371,6 @@ enum StatementKind {
     Expression(Expression),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum Operator {
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Percent,
-    StarStar,
-    And,
-    Pipe,
-    Caret,
-    AndAnd,
-    PipePipe,
-}
-
 #[derive(Debug, PartialEq, Clone)]
 struct Expression {
     position: Position,
@@ -345,13 +382,16 @@ enum ExpressionKind {
     Identifier(usize),
     Integer(i64),
     Double(f64),
+    String(String),
+    Null,
+    Array(Vec<Expression>),
     Function {
         name: Option<usize>,
         parameters: Vec<Expression>,
         body: Vec<Statement>,
     },
-    UnaryOperation(Operator, Box<Expression>),
-    BinaryOperation(Box<Expression>, Operator, Box<Expression>),
+    UnaryOperation(TokenType, Box<Expression>),
+    BinaryOperation(Box<Expression>, TokenType, Box<Expression>),
     Call(Box<Expression>, Vec<Expression>),
     Index(Box<Expression>, Box<Expression>),
 }
@@ -361,6 +401,7 @@ pub type ParseResult<T> = Result<T, String>;
 struct Parser<'a> {
     agent: &'a mut Agent,
     lexer: Peekable<Lexer<'a>>,
+    current_token: Option<Token>,
 }
 
 impl<'a> Parser<'a> {
@@ -368,6 +409,7 @@ impl<'a> Parser<'a> {
         Parser {
             agent,
             lexer: lexer.peekable(),
+            current_token: None,
         }
     }
 
@@ -380,19 +422,25 @@ impl<'a> Parser<'a> {
     }
 
     fn next_token(&mut self) -> ParseResult<Option<Token>> {
-        self.lexer.next().transpose()
+        let result = self.lexer.next().transpose();
+        match &result {
+            Ok(Some(token)) => {
+                self.current_token = Some(token.clone());
+                result
+            }
+            _ => {
+                self.current_token = None;
+                result
+            }
+        }
     }
 
     fn expect(&mut self, expected: TokenType) -> ParseResult<Token> {
         match &self.next_token()? {
             Some(tok) if tok.typ == expected => Ok(tok.clone()),
-            Some(Token {
-                typ,
-                position: Position { line, column },
-                ..
-            }) => Err(format!(
-                "Expected {:?}, got {:?} at {}:{}",
-                expected, typ, line, column
+            Some(Token { typ, position, .. }) => Err(format!(
+                "Expected {:?}, got {:?} at {}",
+                expected, typ, position
             )),
             None => Err(format!("Expected {:?}, found end of input", expected)),
         }
@@ -436,7 +484,8 @@ impl<'a> Parser<'a> {
 
     fn parse_let_declaration(&mut self) -> ParseResult<Statement> {
         let let_ = self.expect(TokenType::Let)?;
-        let ident = self.parse_identifier_expression()?;
+        let ident = self.expect(TokenType::Identifier)?;
+        let ident = self.parse_identifier_expression(ident)?;
 
         let value = if self.matches(TokenType::Equal)? {
             Some(self.parse_expression()?)
@@ -474,14 +523,12 @@ impl<'a> Parser<'a> {
 
     fn parse_function_declaration(&mut self) -> ParseResult<Statement> {
         let function = self.expect(TokenType::Function)?;
-        let ident = self.parse_expression()?;
+        let ident = self.expect(TokenType::Identifier)?;
+        let ident = self.parse_identifier_expression(ident)?;
 
         if let ExpressionKind::Identifier(_) = ident.value {
         } else {
-            return Err(format!(
-                "Expected identifier at {}:{}",
-                ident.position.line, ident.position.column
-            ));
+            return Err(format!("Expected identifier at {}", ident.position));
         }
 
         self.expect(TokenType::LeftParen)?;
@@ -489,8 +536,14 @@ impl<'a> Parser<'a> {
         let params = self.parse_list(
             TokenType::RightParen,
             TokenType::Comma,
-            Self::parse_identifier_expression,
-            |_| Ok(()),
+            Self::parse_expression,
+            |ident| {
+                if let ExpressionKind::Identifier(_) = ident.value {
+                    Ok(())
+                } else {
+                    Err(format!("Expected identifier at {}", ident.position))
+                }
+            },
         )?;
 
         let mut body = Vec::new();
@@ -649,40 +702,82 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn nud(&mut self, token: Token) -> ParseResult<Expression> {
+        match token.typ {
+            TokenType::Identifier => self.parse_identifier_expression(token),
+            TokenType::Integer => self.parse_integer_expression(token),
+            TokenType::Double => self.parse_double_expression(token),
+            TokenType::String => self.parse_string_expression(token),
+            TokenType::Null => self.parse_null_expression(token),
+            TokenType::LeftParen => self.parse_parenthesized_expression(token),
+            TokenType::LeftBracket => self.parse_array_expression(token),
+
+            _ => Err(format!(
+                "Unexpected token {:?} at {}",
+                token.typ, token.position
+            )),
+        }
+    }
+
+    fn led(&mut self, token: Token, left: Expression) -> ParseResult<Expression> {
+        match token.typ {
+            TokenType::Plus
+            | TokenType::Minus
+            | TokenType::Star
+            | TokenType::Slash
+            | TokenType::Percent
+            | TokenType::StarStar
+            | TokenType::LessThan
+            | TokenType::LessThanEqual
+            | TokenType::GreaterThan
+            | TokenType::GreaterThanEqual
+            | TokenType::EqualEqual
+            | TokenType::BangEqual => self.parse_left_assoc_binary(token, left),
+            TokenType::Equal => self.parse_right_assoc_binary(token, left),
+            TokenType::LeftParen => self.parse_call_expression(token, left),
+            TokenType::LeftBracket => self.parse_index_expression(token, left),
+
+            _ => Err(format!(
+                "Unexpected token {:?} at {}",
+                token.typ, token.position
+            )),
+        }
+    }
+
     fn parse_expression(&mut self) -> ParseResult<Expression> {
-        if let Some(token) = self.peek()? {
-            match token.typ {
-                TokenType::Identifier => self.parse_identifier_expression(),
-                TokenType::Integer => self.parse_integer_expression(),
-                TokenType::Double => self.parse_double_expression(),
-                _ => panic!(format!("Saw {:?} when parsing expression", token)),
-            }
-        } else {
-            unreachable!();
-        }
+        self.parse_expression_inner(0)
     }
 
-    fn parse_identifier_expression(&mut self) -> ParseResult<Expression> {
-        let Token {
-            typ,
-            position,
-            text,
-        } = self.expect(TokenType::Identifier)?;
-        if typ == TokenType::Identifier {
-            let s = text.to_string();
-            let id = self.agent.intern_string(s.as_ref());
-            Ok(Expression {
-                position,
-                value: ExpressionKind::Identifier(id),
-            })
-        } else {
-            unreachable!();
+    fn parse_expression_inner(&mut self, rbp: usize) -> ParseResult<Expression> {
+        macro_rules! some {
+            ($token:expr) => {
+                $token.ok_or_else(|| "Unexpected end of input".to_string())?
+            };
         }
+
+        let mut t = some!(self.next_token()?);
+        let mut token = self.peek()?.cloned();
+        let mut left = self.nud(t)?;
+
+        while token.is_some() && rbp < token.unwrap().lbp() {
+            t = some!(self.next_token()?);
+            token = self.peek()?.cloned();
+            left = self.led(t, left)?;
+        }
+
+        Ok(left)
     }
 
-    fn parse_integer_expression(&mut self) -> ParseResult<Expression> {
-        let number = self.expect(TokenType::Integer)?;
+    fn parse_identifier_expression(&mut self, ident: Token) -> ParseResult<Expression> {
+        let s = ident.text.to_string();
+        let id = self.agent.intern_string(s.as_ref());
+        Ok(Expression {
+            position: ident.position,
+            value: ExpressionKind::Identifier(id),
+        })
+    }
 
+    fn parse_integer_expression(&mut self, number: Token) -> ParseResult<Expression> {
         let intval = number
             .text
             .parse()
@@ -694,9 +789,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_double_expression(&mut self) -> ParseResult<Expression> {
-        let number = self.expect(TokenType::Double)?;
-
+    fn parse_double_expression(&mut self, number: Token) -> ParseResult<Expression> {
         let floatval: f64 = number
             .text
             .parse()
@@ -705,6 +798,87 @@ impl<'a> Parser<'a> {
         Ok(Expression {
             position: number.position,
             value: ExpressionKind::Double(floatval),
+        })
+    }
+
+    fn parse_string_expression(&mut self, string: Token) -> ParseResult<Expression> {
+        Ok(Expression {
+            position: string.position,
+            value: ExpressionKind::String(string.text),
+        })
+    }
+
+    fn parse_null_expression(&mut self, null: Token) -> ParseResult<Expression> {
+        Ok(Expression {
+            position: null.position,
+            value: ExpressionKind::Null,
+        })
+    }
+
+    fn parse_parenthesized_expression(&mut self, _: Token) -> ParseResult<Expression> {
+        let expr = self.parse_expression()?;
+        self.expect(TokenType::RightParen)?;
+        Ok(expr)
+    }
+
+    fn parse_array_expression(&mut self, left_bracket: Token) -> ParseResult<Expression> {
+        Ok(Expression {
+            position: left_bracket.position,
+            value: ExpressionKind::Array(self.parse_list(
+                TokenType::RightBracket,
+                TokenType::Comma,
+                Self::parse_expression,
+                |_| Ok(()),
+            )?),
+        })
+    }
+
+    fn parse_left_assoc_binary(&mut self, op: Token, left: Expression) -> ParseResult<Expression> {
+        let right = self.parse_expression_inner(op.lbp())?;
+
+        Ok(Expression {
+            position: left.position,
+            value: ExpressionKind::BinaryOperation(Box::new(left), op.typ, Box::new(right)),
+        })
+    }
+
+    fn parse_right_assoc_binary(&mut self, op: Token, left: Expression) -> ParseResult<Expression> {
+        let right = self.parse_expression_inner(op.lbp() - 1)?;
+
+        Ok(Expression {
+            position: left.position,
+            value: ExpressionKind::BinaryOperation(Box::new(left), op.typ, Box::new(right)),
+        })
+    }
+
+    fn parse_call_expression(
+        &mut self,
+        _left_paren: Token,
+        callee: Expression,
+    ) -> ParseResult<Expression> {
+        let args = self.parse_list(
+            TokenType::RightParen,
+            TokenType::Comma,
+            Self::parse_expression,
+            |_| Ok(()),
+        )?;
+
+        Ok(Expression {
+            position: callee.position,
+            value: ExpressionKind::Call(Box::new(callee), args),
+        })
+    }
+
+    fn parse_index_expression(
+        &mut self,
+        _left_bracket: Token,
+        arr: Expression,
+    ) -> ParseResult<Expression> {
+        let index = self.parse_expression()?;
+
+        Ok(Expression {
+            position: arr.position,
+            value: ExpressionKind::Index(Box::new(arr), Box::new(index)),
         })
     }
 }
@@ -904,8 +1078,8 @@ function
         let parser = Parser::new(&mut agent, lexer);
 
         assert_eq!(
-            parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
-            vec![Statement {
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
                 position: Position { line: 1, column: 1 },
                 value: StatementKind::Let {
                     name: Expression {
@@ -920,7 +1094,7 @@ function
                         value: ExpressionKind::Identifier(someident),
                     }),
                 },
-            },],
+            })],
         );
     }
 
