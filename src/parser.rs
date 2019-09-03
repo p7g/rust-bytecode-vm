@@ -4,7 +4,7 @@ use std::str::Chars;
 use crate::agent::Agent;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum TokenType {
+pub enum TokenType {
     Identifier,
     Integer,
     Double,
@@ -50,7 +50,7 @@ enum TokenType {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-struct Position {
+pub struct Position {
     line: usize,
     column: usize,
 }
@@ -62,7 +62,7 @@ impl std::fmt::Display for Position {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct Token {
+pub struct Token {
     position: Position,
     typ: TokenType,
     text: String,
@@ -127,7 +127,7 @@ impl Token {
     }
 }
 
-struct Lexer<'a> {
+pub struct Lexer<'a> {
     position: usize,
     line: usize,
     column: usize,
@@ -333,14 +333,14 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct Statement {
+pub struct Statement {
     position: Position,
     value: StatementKind,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq, Clone)]
-enum StatementKind {
+pub enum StatementKind {
     Function {
         name: Expression,
         parameters: Vec<Expression>,
@@ -372,13 +372,13 @@ enum StatementKind {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct Expression {
+pub struct Expression {
     position: Position,
     value: ExpressionKind,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum ExpressionKind {
+pub enum ExpressionKind {
     Identifier(usize),
     Integer(i64),
     Double(f64),
@@ -398,7 +398,7 @@ enum ExpressionKind {
 
 pub type ParseResult<T> = Result<T, String>;
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     agent: &'a mut Agent,
     lexer: Peekable<Lexer<'a>>,
     current_token: Option<Token>,
