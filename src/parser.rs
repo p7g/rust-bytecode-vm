@@ -762,8 +762,8 @@ impl<'a> Parser<'a> {
 
         while token.is_some() && rbp < token.unwrap().lbp() {
             t = some!(self.next_token()?);
-            token = self.peek()?.cloned();
             left = self.led(t, left)?;
+            token = self.peek()?.cloned();
         }
 
         Ok(left)
