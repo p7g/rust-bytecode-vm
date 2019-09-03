@@ -1698,11 +1698,11 @@ return 1;
     }
 
     macro_rules! test_expression {
-        ($input:expr, $result:expr) => {{
+        ($input:expr, $result:expr $(,)?) => {{
             let agent = Agent::new();
             test_expression!($input, $result, agent);
         }};
-        ($input:expr, $result:expr, $agent:expr) => {{
+        ($input:expr, $result:expr, $agent:expr $(,)?) => {{
             let mut agent = $agent;
             let input = $input;
             let lexer = Lexer::new(input);
