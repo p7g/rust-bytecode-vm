@@ -382,7 +382,7 @@ enum ExpressionKind {
     Identifier(usize),
     Integer(i64),
     Double(f64),
-    String(String),
+    String(usize),
     Null,
     Array(Vec<Expression>),
     Function {
@@ -769,8 +769,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_identifier_expression(&mut self, ident: Token) -> ParseResult<Expression> {
-        let s = ident.text.to_string();
-        let id = self.agent.intern_string(s.as_ref());
+        let id = self.agent.intern_string(ident.text.as_ref());
         Ok(Expression {
             position: ident.position,
             value: ExpressionKind::Identifier(id),
@@ -802,9 +801,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_string_expression(&mut self, string: Token) -> ParseResult<Expression> {
+        let id = self
+            .agent
+            .intern_string(&string.text[1..string.text.len() - 1]);
         Ok(Expression {
             position: string.position,
-            value: ExpressionKind::String(string.text),
+            value: ExpressionKind::String(id),
         })
     }
 
