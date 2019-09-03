@@ -817,9 +817,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_parenthesized_expression(&mut self, _: Token) -> ParseResult<Expression> {
-        let expr = self.parse_expression()?;
+    fn parse_parenthesized_expression(&mut self, left_paren: Token) -> ParseResult<Expression> {
+        let mut expr = self.parse_expression()?;
         self.expect(TokenType::RightParen)?;
+        expr.position = left_paren.position;
         Ok(expr)
     }
 
