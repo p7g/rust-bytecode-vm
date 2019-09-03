@@ -9,6 +9,8 @@ echo_debug() { if [ "$AUTOHOOK_DEBUG" != '' ]; then >&2 echo "[DEBUG] $*"; fi; }
 repo_root() { git rev-parse --show-toplevel; }
 hooks_dir() { builtin echo "$(repo_root)/.hooks"; }
 
+pid_file="$(mktemp)"
+
 hook_types=(
     "applypatch-msg" "commit-msg" "post-applypatch" "post-checkout"
     "post-commit" "post-merge" "post-receive" "post-rewrite"
@@ -86,7 +88,9 @@ run_symlinks() {
         return 1
     fi
     tail -f -n +1 "$autohook_stdout" > /dev/stdout &
+    builtin echo "$!" >> "$pid_file"
     tail -f -n +1 "$autohook_stderr" > /dev/stderr &
+    builtin echo "$!" >> "$pid_file"
 
     script_files=()
     while IFS='' read -r script_file; do
@@ -195,7 +199,7 @@ USAGE
 
 main() {
     calling_file=$(basename "$0")
-    trap '>/dev/null 2>&1 kill -- -$$ || :' SIGINT SIGTERM EXIT
+    trap '{ cat "$pid_file" | xargs kill --; rm "$pid_file"; }' SIGINT SIGTERM EXIT
     echo_debug "called by '$calling_file'"
     if [ "$calling_file" == "autohook.sh" ]; then
         if [ "$1" = '-h' ]; then
