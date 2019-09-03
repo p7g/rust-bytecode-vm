@@ -1737,4 +1737,78 @@ return 1;
     fn test_double_expression() {
         test_expression!("1.23;", ExpressionKind::Double(1.23));
     }
+
+    #[test]
+    fn test_string_expression() {
+        let mut agent = Agent::new();
+        let s = agent.intern_string("hello world");
+        test_expression!("\"hello world\";", ExpressionKind::String(s), agent);
+    }
+
+    #[test]
+    fn test_null_expression() {
+        test_expression!("null;", ExpressionKind::Null);
+    }
+
+    #[test]
+    fn test_parenthesized_expression() {
+        test_expression!("(123);", ExpressionKind::Integer(123));
+    }
+
+    #[test]
+    fn test_array_expression() {
+        test_expression!(
+            "[1, 2, 3];",
+            ExpressionKind::Array(vec![
+                Expression {
+                    position: Position { line: 1, column: 2 },
+                    value: ExpressionKind::Integer(1),
+                },
+                Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::Integer(2),
+                },
+                Expression {
+                    position: Position { line: 1, column: 8 },
+                    value: ExpressionKind::Integer(3),
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn test_unary_minus() {
+        test_expression!(
+            "-1;",
+            ExpressionKind::UnaryOperation(
+                TokenType::Minus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 2 },
+                    value: ExpressionKind::Integer(1),
+                })
+            )
+        );
+        test_expression!(
+            "---1;",
+            ExpressionKind::UnaryOperation(
+                TokenType::Minus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 2 },
+                    value: ExpressionKind::UnaryOperation(
+                        TokenType::Minus,
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 3 },
+                            value: ExpressionKind::UnaryOperation(
+                                TokenType::Minus,
+                                Box::new(Expression {
+                                    position: Position { line: 1, column: 4 },
+                                    value: ExpressionKind::Integer(1),
+                                }),
+                            )
+                        }),
+                    )
+                })
+            )
+        );
+    }
 }
