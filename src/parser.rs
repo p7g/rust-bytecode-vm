@@ -727,14 +727,13 @@ impl<'a> Parser<'a> {
             | TokenType::Star
             | TokenType::Slash
             | TokenType::Percent
-            | TokenType::StarStar
             | TokenType::LessThan
             | TokenType::LessThanEqual
             | TokenType::GreaterThan
             | TokenType::GreaterThanEqual
             | TokenType::EqualEqual
             | TokenType::BangEqual => self.parse_left_assoc_binary(token, left),
-            TokenType::Equal => self.parse_right_assoc_binary(token, left),
+            TokenType::Equal | TokenType::StarStar => self.parse_right_assoc_binary(token, left),
             TokenType::LeftParen => self.parse_call_expression(token, left),
             TokenType::LeftBracket => self.parse_index_expression(token, left),
 
