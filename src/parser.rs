@@ -1812,4 +1812,335 @@ return 1;
             )
         );
     }
+
+    #[test]
+    fn test_binary_addition() {
+        test_expression!(
+            "1 + 1;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Integer(1),
+                }),
+                TokenType::Plus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::Integer(1),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_binary_precedence() {
+        test_expression!(
+            "1 + 2 * 3;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Integer(1),
+                }),
+                TokenType::Plus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 5 },
+                            value: ExpressionKind::Integer(2),
+                        }),
+                        TokenType::Star,
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 9 },
+                            value: ExpressionKind::Integer(3),
+                        }),
+                    ),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_binary_left_assoc() {
+        let mut agent = Agent::new();
+        let a = agent.intern_string("a");
+        let b = agent.intern_string("b");
+        let c = agent.intern_string("c");
+        test_expression!(
+            "a + b + c;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 1 },
+                            value: ExpressionKind::Identifier(a),
+                        }),
+                        TokenType::Plus,
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 5 },
+                            value: ExpressionKind::Identifier(b),
+                        }),
+                    ),
+                }),
+                TokenType::Plus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 9 },
+                    value: ExpressionKind::Identifier(c),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_binary_right_assoc() {
+        let mut agent = Agent::new();
+        let a = agent.intern_string("a");
+        let b = agent.intern_string("b");
+        let c = agent.intern_string("c");
+        test_expression!(
+            "a = b = c;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Identifier(a),
+                }),
+                TokenType::Equal,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 5 },
+                            value: ExpressionKind::Identifier(b),
+                        }),
+                        TokenType::Equal,
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 9 },
+                            value: ExpressionKind::Identifier(c),
+                        }),
+                    ),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_call_expression() {
+        let mut agent = Agent::new();
+        let ident_print = agent.intern_string("print");
+        test_expression!(
+            "print(1 + 1, 2, 3);",
+            ExpressionKind::Call(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Identifier(ident_print),
+                }),
+                vec![
+                    Expression {
+                        position: Position { line: 1, column: 7 },
+                        value: ExpressionKind::BinaryOperation(
+                            Box::new(Expression {
+                                position: Position { line: 1, column: 7 },
+                                value: ExpressionKind::Integer(1),
+                            }),
+                            TokenType::Plus,
+                            Box::new(Expression {
+                                position: Position {
+                                    line: 1,
+                                    column: 11
+                                },
+                                value: ExpressionKind::Integer(1),
+                            }),
+                        ),
+                    },
+                    Expression {
+                        position: Position {
+                            line: 1,
+                            column: 14
+                        },
+                        value: ExpressionKind::Integer(2),
+                    },
+                    Expression {
+                        position: Position {
+                            line: 1,
+                            column: 17
+                        },
+                        value: ExpressionKind::Integer(3),
+                    },
+                ],
+            ),
+        );
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let mut agent = Agent::new();
+        let ident_array = agent.intern_string("array");
+        test_expression!(
+            "array[1];",
+            ExpressionKind::Index(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Identifier(ident_array),
+                }),
+                Box::new(Expression {
+                    position: Position { line: 1, column: 7 },
+                    value: ExpressionKind::Integer(1),
+                }),
+            ),
+            agent,
+        );
+    }
+
+    #[test]
+    fn test_nontrivial_index_expression() {
+        test_expression!(
+            "(1 = 2)[1];",
+            ExpressionKind::Index(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 2 },
+                            value: ExpressionKind::Integer(1),
+                        }),
+                        TokenType::Equal,
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 6 },
+                            value: ExpressionKind::Integer(2),
+                        }),
+                    ),
+                }),
+                Box::new(Expression {
+                    position: Position { line: 1, column: 9 },
+                    value: ExpressionKind::Integer(1),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_binary_expression_with_index_expression() {
+        test_expression!(
+            "1 + (3 / 4)[0] * 3;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Integer(1),
+                }),
+                TokenType::Plus,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 5 },
+                            value: ExpressionKind::Index(
+                                Box::new(Expression {
+                                    position: Position { line: 1, column: 5 },
+                                    value: ExpressionKind::BinaryOperation(
+                                        Box::new(Expression {
+                                            position: Position { line: 1, column: 6 },
+                                            value: ExpressionKind::Integer(3),
+                                        }),
+                                        TokenType::Slash,
+                                        Box::new(Expression {
+                                            position: Position {
+                                                line: 1,
+                                                column: 10
+                                            },
+                                            value: ExpressionKind::Integer(4),
+                                        }),
+                                    ),
+                                }),
+                                Box::new(Expression {
+                                    position: Position {
+                                        line: 1,
+                                        column: 13
+                                    },
+                                    value: ExpressionKind::Integer(0),
+                                }),
+                            ),
+                        }),
+                        TokenType::Star,
+                        Box::new(Expression {
+                            position: Position {
+                                line: 1,
+                                column: 18
+                            },
+                            value: ExpressionKind::Integer(3),
+                        }),
+                    ),
+                }),
+            ),
+        );
+    }
+
+    #[test]
+    fn test_mixed_associativity_and_precedence() {
+        test_expression!(
+            "2 = 1 * 2 + 3 ** 5 - 1;",
+            ExpressionKind::BinaryOperation(
+                Box::new(Expression {
+                    position: Position { line: 1, column: 1 },
+                    value: ExpressionKind::Integer(2),
+                }),
+                TokenType::Equal,
+                Box::new(Expression {
+                    position: Position { line: 1, column: 5 },
+                    value: ExpressionKind::BinaryOperation(
+                        Box::new(Expression {
+                            position: Position { line: 1, column: 5 },
+                            value: ExpressionKind::BinaryOperation(
+                                Box::new(Expression {
+                                    position: Position { line: 1, column: 5 },
+                                    value: ExpressionKind::BinaryOperation(
+                                        Box::new(Expression {
+                                            position: Position { line: 1, column: 5 },
+                                            value: ExpressionKind::Integer(1),
+                                        }),
+                                        TokenType::Star,
+                                        Box::new(Expression {
+                                            position: Position { line: 1, column: 9 },
+                                            value: ExpressionKind::Integer(2),
+                                        }),
+                                    ),
+                                }),
+                                TokenType::Plus,
+                                Box::new(Expression {
+                                    position: Position {
+                                        line: 1,
+                                        column: 13
+                                    },
+                                    value: ExpressionKind::BinaryOperation(
+                                        Box::new(Expression {
+                                            position: Position {
+                                                line: 1,
+                                                column: 13
+                                            },
+                                            value: ExpressionKind::Integer(3),
+                                        }),
+                                        TokenType::StarStar,
+                                        Box::new(Expression {
+                                            position: Position {
+                                                line: 1,
+                                                column: 18
+                                            },
+                                            value: ExpressionKind::Integer(5),
+                                        }),
+                                    ),
+                                }),
+                            ),
+                        }),
+                        TokenType::Minus,
+                        Box::new(Expression {
+                            position: Position {
+                                line: 1,
+                                column: 22
+                            },
+                            value: ExpressionKind::Integer(1),
+                        }),
+                    ),
+                }),
+            ),
+        );
+    }
 }
