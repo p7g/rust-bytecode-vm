@@ -888,6 +888,7 @@ impl<'a> Parser<'a> {
         arr: Expression,
     ) -> ParseResult<Expression> {
         let index = self.parse_expression()?;
+        self.expect(TokenType::RightBracket)?;
 
         Ok(Expression {
             position: arr.position,
