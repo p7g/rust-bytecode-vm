@@ -1,9 +1,9 @@
 # TODO
 
-- [ ] test `led` expression parsing
+- [x] test `led` expression parsing
     - associativity
     - precedence
-- [ ] add function expression
+- [x] add function expression
 - [ ] replace string escapes with actual characters in lexer
 - [ ] write compiler (AST -> bytecode)
 - [ ] import/export
