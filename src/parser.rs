@@ -399,6 +399,14 @@ pub enum ExpressionKind {
 
 pub type ParseResult<T> = Result<T, String>;
 
+fn assert_ident(ident: &Expression) -> ParseResult<()> {
+    if let ExpressionKind::Identifier(_) = ident.value {
+        Ok(())
+    } else {
+        Err(format!("Expected identifier at {}", ident.position))
+    }
+}
+
 pub struct Parser<'a> {
     agent: &'a mut Agent,
     lexer: Peekable<Lexer<'a>>,
@@ -527,24 +535,13 @@ impl<'a> Parser<'a> {
         let ident = self.expect(TokenType::Identifier)?;
         let ident = self.parse_identifier_expression(ident)?;
 
-        if let ExpressionKind::Identifier(_) = ident.value {
-        } else {
-            return Err(format!("Expected identifier at {}", ident.position));
-        }
-
         self.expect(TokenType::LeftParen)?;
 
         let params = self.parse_list(
             TokenType::RightParen,
             TokenType::Comma,
             Self::parse_expression,
-            |ident| {
-                if let ExpressionKind::Identifier(_) = ident.value {
-                    Ok(())
-                } else {
-                    Err(format!("Expected identifier at {}", ident.position))
-                }
-            },
+            assert_ident,
         )?;
 
         let mut body = Vec::new();
