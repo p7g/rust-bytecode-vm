@@ -387,7 +387,7 @@ pub enum ExpressionKind {
     Null,
     Array(Vec<Expression>),
     Function {
-        name: Option<usize>,
+        name: Option<Box<Expression>>,
         parameters: Vec<Expression>,
         body: Vec<Statement>,
     },
@@ -710,6 +710,7 @@ impl<'a> Parser<'a> {
             TokenType::LeftParen => self.parse_parenthesized_expression(token),
             TokenType::LeftBracket => self.parse_array_expression(token),
             TokenType::Minus | TokenType::Bang => self.parse_unary_expression(token),
+            TokenType::Function => self.parse_function_expression(token),
 
             _ => Err(format!(
                 "Unexpected token {:?} at {}",
@@ -890,6 +891,40 @@ impl<'a> Parser<'a> {
         Ok(Expression {
             position: arr.position,
             value: ExpressionKind::Index(Box::new(arr), Box::new(index)),
+        })
+    }
+
+    fn parse_function_expression(&mut self, functionkw: Token) -> ParseResult<Expression> {
+        let name = if self.matches(TokenType::LeftParen)? {
+            None
+        } else {
+            let ident = self.expect(TokenType::Identifier)?;
+            let ident = self.parse_identifier_expression(ident)?;
+            self.expect(TokenType::LeftParen)?;
+            Some(Box::new(ident))
+        };
+
+        let parameters = self.parse_list(
+            TokenType::RightParen,
+            TokenType::Comma,
+            Self::parse_expression,
+            assert_ident,
+        )?;
+
+        self.expect(TokenType::LeftBrace)?;
+
+        let mut body = Vec::new();
+        while !self.matches(TokenType::RightBrace)? {
+            body.push(self.parse_statement()?);
+        }
+
+        Ok(Expression {
+            position: functionkw.position,
+            value: ExpressionKind::Function {
+                name,
+                parameters,
+                body,
+            },
         })
     }
 }
@@ -2138,6 +2173,18 @@ return 1;
                     ),
                 }),
             ),
+        );
+    }
+
+    #[test]
+    fn test_function_expression() {
+        test_expression!(
+            "(function() {});",
+            ExpressionKind::Function {
+                name: None,
+                parameters: Vec::new(),
+                body: Vec::new(),
+            },
         );
     }
 }
