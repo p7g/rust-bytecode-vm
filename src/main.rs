@@ -47,7 +47,8 @@ fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
 fn main() -> Result<(), String> {
     let mut agent = Agent::new();
 
-    let bytecode = bytecode! {
+    let mut bytecode = Bytecode::new();
+    bytecode! { (&mut bytecode)
         const_int 3
         const_int 4
         load_global (agent.intern_string("print"))

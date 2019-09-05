@@ -16,7 +16,7 @@ impl Bytecode {
         }
     }
 
-    pub fn label(mut self, name: &'static str) -> Bytecode {
+    pub fn label(&mut self, name: &'static str) -> &mut Bytecode {
         let address = self.instructions.len();
         self.label_addresses.insert(name, address);
 
@@ -31,7 +31,7 @@ impl Bytecode {
         self
     }
 
-    pub fn address_of(mut self, name: &'static str) -> Bytecode {
+    pub fn address_of(&mut self, name: &'static str) -> &mut Bytecode {
         if self.label_addresses.contains_key(name) {
             let address = { *self.label_addresses.get(name).unwrap() };
             self.usize(address)
@@ -50,156 +50,156 @@ impl Bytecode {
         }
     }
 
-    pub fn op(mut self, opcode: OpCode) -> Bytecode {
+    pub fn op(&mut self, opcode: OpCode) -> &mut Bytecode {
         self.instructions.push(opcode.into());
         self
     }
 
-    pub fn i64(mut self, n: i64) -> Bytecode {
+    pub fn i64(&mut self, n: i64) -> &mut Bytecode {
         self.instructions.append(&mut n.to_le_bytes().to_vec());
         self
     }
 
-    pub fn f64(mut self, n: f64) -> Bytecode {
+    pub fn f64(&mut self, n: f64) -> &mut Bytecode {
         self.instructions
             .append(&mut n.to_bits().to_le_bytes().to_vec());
         self
     }
 
-    pub fn usize(mut self, n: usize) -> Bytecode {
+    pub fn usize(&mut self, n: usize) -> &mut Bytecode {
         self.instructions.append(&mut n.to_le_bytes().to_vec());
         self
     }
 
-    pub fn halt(self) -> Bytecode {
+    pub fn halt(&mut self) -> &mut Bytecode {
         self.op(OpCode::Halt)
     }
 
-    pub fn const_int(self, n: i64) -> Bytecode {
+    pub fn const_int(&mut self, n: i64) -> &mut Bytecode {
         self.op(OpCode::ConstInt).i64(n)
     }
 
-    pub fn const_double(self, n: f64) -> Bytecode {
+    pub fn const_double(&mut self, n: f64) -> &mut Bytecode {
         self.op(OpCode::ConstDouble).f64(n)
     }
 
-    pub fn const_null(self) -> Bytecode {
+    pub fn const_null(&mut self) -> &mut Bytecode {
         self.op(OpCode::ConstNull)
     }
 
-    pub fn const_true(self) -> Bytecode {
+    pub fn const_true(&mut self) -> &mut Bytecode {
         self.op(OpCode::ConstTrue)
     }
 
-    pub fn const_false(self) -> Bytecode {
+    pub fn const_false(&mut self) -> &mut Bytecode {
         self.op(OpCode::ConstFalse)
     }
 
-    pub fn const_string(self, id: usize) -> Bytecode {
+    pub fn const_string(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::ConstString).usize(id)
     }
 
-    pub fn add(self) -> Bytecode {
+    pub fn add(&mut self) -> &mut Bytecode {
         self.op(OpCode::Add)
     }
 
-    pub fn sub(self) -> Bytecode {
+    pub fn sub(&mut self) -> &mut Bytecode {
         self.op(OpCode::Sub)
     }
 
-    pub fn mul(self) -> Bytecode {
+    pub fn mul(&mut self) -> &mut Bytecode {
         self.op(OpCode::Mul)
     }
 
-    pub fn div(self) -> Bytecode {
+    pub fn div(&mut self) -> &mut Bytecode {
         self.op(OpCode::Div)
     }
 
-    pub fn rem(self) -> Bytecode {
+    pub fn rem(&mut self) -> &mut Bytecode {
         self.op(OpCode::Mod)
     }
 
-    pub fn exp(self) -> Bytecode {
+    pub fn exp(&mut self) -> &mut Bytecode {
         self.op(OpCode::Exp)
     }
 
-    pub fn jump(self, ip: usize) -> Bytecode {
+    pub fn jump(&mut self, ip: usize) -> &mut Bytecode {
         self.op(OpCode::Jump).usize(ip)
     }
 
-    pub fn jump_if_true(self, ip: usize) -> Bytecode {
+    pub fn jump_if_true(&mut self, ip: usize) -> &mut Bytecode {
         self.op(OpCode::JumpIfTrue).usize(ip)
     }
 
-    pub fn jump_if_false(self, ip: usize) -> Bytecode {
+    pub fn jump_if_false(&mut self, ip: usize) -> &mut Bytecode {
         self.op(OpCode::JumpIfFalse).usize(ip)
     }
 
-    pub fn call(self, num_args: usize) -> Bytecode {
+    pub fn call(&mut self, num_args: usize) -> &mut Bytecode {
         self.op(OpCode::Call).usize(num_args)
     }
 
-    pub fn ret(self) -> Bytecode {
+    pub fn ret(&mut self) -> &mut Bytecode {
         self.op(OpCode::Return)
     }
 
-    pub fn pop(self) -> Bytecode {
+    pub fn pop(&mut self) -> &mut Bytecode {
         self.op(OpCode::Pop)
     }
 
-    pub fn load_local(self, id: usize) -> Bytecode {
+    pub fn load_local(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::LoadLocal).usize(id)
     }
 
-    pub fn store_local(self, id: usize) -> Bytecode {
+    pub fn store_local(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::StoreLocal).usize(id)
     }
 
-    pub fn load_global(self, id: usize) -> Bytecode {
+    pub fn load_global(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::LoadGlobal).usize(id)
     }
 
-    pub fn store_global(self, id: usize) -> Bytecode {
+    pub fn store_global(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::StoreGlobal).usize(id)
     }
 
-    pub fn new_function(self, arity: usize, address: usize) -> Bytecode {
+    pub fn new_function(&mut self, arity: usize, address: usize) -> &mut Bytecode {
         self.op(OpCode::NewFunction).usize(arity).usize(address)
     }
 
-    pub fn bind_local(self, id: usize) -> Bytecode {
+    pub fn bind_local(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::BindLocal).usize(id)
     }
 
-    pub fn bind_upvalue(self, id: usize) -> Bytecode {
+    pub fn bind_upvalue(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::BindUpvalue).usize(id)
     }
 
-    pub fn load_upvalue(self, id: usize) -> Bytecode {
+    pub fn load_upvalue(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::LoadUpvalue).usize(id)
     }
 
-    pub fn store_upvalue(self, id: usize) -> Bytecode {
+    pub fn store_upvalue(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::StoreUpvalue).usize(id)
     }
 
-    pub fn load_argument(self, id: usize) -> Bytecode {
+    pub fn load_argument(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::LoadArgument).usize(id)
     }
 
-    pub fn store_argument(self, id: usize) -> Bytecode {
+    pub fn store_argument(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::StoreArgument).usize(id)
     }
 
-    pub fn new_array(self, len: usize) -> Bytecode {
+    pub fn new_array(&mut self, len: usize) -> &mut Bytecode {
         self.op(OpCode::NewArray).usize(len)
     }
 
-    pub fn array_get(self) -> Bytecode {
+    pub fn array_get(&mut self) -> &mut Bytecode {
         self.op(OpCode::ArrayGet)
     }
 
-    pub fn array_set(self) -> Bytecode {
+    pub fn array_set(&mut self) -> &mut Bytecode {
         self.op(OpCode::ArraySet)
     }
 
