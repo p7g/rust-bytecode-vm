@@ -49,6 +49,7 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::StoreLocal
             | OpCode::BindLocal
             | OpCode::BindUpvalue
+            | OpCode::BindArgument
             | OpCode::LoadUpvalue
             | OpCode::StoreUpvalue
             | OpCode::LoadArgument
@@ -57,7 +58,10 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
                 println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
             }
 
-            OpCode::LoadGlobal | OpCode::StoreGlobal | OpCode::ConstString => {
+            OpCode::LoadGlobal
+            | OpCode::DeclareGlobal
+            | OpCode::StoreGlobal
+            | OpCode::ConstString => {
                 println!(
                     "{:?}({:?})",
                     instruction,

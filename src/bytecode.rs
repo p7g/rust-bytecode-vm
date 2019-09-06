@@ -159,6 +159,10 @@ impl Bytecode {
         self.op(OpCode::LoadGlobal).usize(id)
     }
 
+    pub fn declare_global(&mut self, id: usize) -> &mut Bytecode {
+        self.op(OpCode::DeclareGlobal).usize(id)
+    }
+
     pub fn store_global(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::StoreGlobal).usize(id)
     }
@@ -173,6 +177,10 @@ impl Bytecode {
 
     pub fn bind_upvalue(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::BindUpvalue).usize(id)
+    }
+
+    pub fn bind_argument(&mut self, id: usize) -> &mut Bytecode {
+        self.op(OpCode::BindArgument).usize(id)
     }
 
     pub fn load_upvalue(&mut self, id: usize) -> &mut Bytecode {
@@ -368,6 +376,12 @@ macro_rules! bytecode {
             $($tt)*
         }
     }};
+    (($builder:expr) declare_global ($id:expr) $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.declare_global($id))
+            $($tt)*
+        }
+    }};
     (($builder:expr) store_global ($id:expr) $($tt:tt)*) => {{
         bytecode! {
             ($builder.store_global($id))
@@ -377,6 +391,12 @@ macro_rules! bytecode {
     (($builder:expr) load_global $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.load_global($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) declare_global $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.declare_global($id))
             $($tt)*
         }
     }};
@@ -407,6 +427,12 @@ macro_rules! bytecode {
     (($builder:expr) bind_upvalue $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.bind_upvalue($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bind_argument $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bind_argument($id))
             $($tt)*
         }
     }};

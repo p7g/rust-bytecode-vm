@@ -294,8 +294,8 @@ impl<'a> Interpreter<'a> {
                             } => {
                                 ensure_arity!(*arity, name);
                                 self.call_stack.push(self.ip); // return address
-                                self.call_stack.push(num_args); // for cleanup
                                 self.call_stack.push(self.bp); // current base pointer
+                                self.call_stack.push(num_args); // for cleanup
                                 self.bp = self.sp; // new base is at current stack index
                                 self.ip = *address; // jump into function
                                 push!(function);
@@ -308,12 +308,10 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::Return => {
                     let retval = pop!();
-                    self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
                     let num_args = self
                         .call_stack
                         .pop()
                         .ok_or("Missing num_args on call_stack")?;
-                    self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
 
                     while let Some(uv) = self.agent.upvalues.pop() {
                         if uv.borrow().is_open() {
@@ -327,6 +325,9 @@ impl<'a> Interpreter<'a> {
                             return Err("Had closed upvalue in agent.upvalues".to_string());
                         }
                     }
+
+                    self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
+                    self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
 
                     // minus one for the expression being returned
                     pop!(num_args + self.sp - self.bp - 1);
@@ -356,6 +357,11 @@ impl<'a> Interpreter<'a> {
                             self.agent.string_table[id]
                         ));
                     }
+                }
+
+                OpCode::DeclareGlobal => {
+                    let id = usize::from_le_bytes(next!(8));
+                    self.global.insert(id, Value::Null);
                 }
 
                 OpCode::StoreGlobal => {
@@ -422,6 +428,34 @@ impl<'a> Interpreter<'a> {
                         push!(func);
                     } else {
                         return Err("Cannot bind upvalue to non-user function".to_string());
+                    }
+                }
+
+                OpCode::BindArgument => {
+                    let idx = usize::from_le_bytes(next!(8));
+                    let mut func = pop!();
+
+                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+                        if let Value::Function(_) = &executing_function!() {
+                            let idx = arguments_index!() - idx;
+                            let upvalue = if let Some(upvalue) =
+                                self.agent.upvalues.iter().find(|uv| {
+                                    uv.borrow().is_open() && uv.borrow().stack_index() == idx
+                                }) {
+                                upvalue
+                            } else {
+                                self.agent
+                                    .upvalues
+                                    .push(Rc::new(RefCell::new(Upvalue::new(idx))));
+                                self.agent.upvalues.last().unwrap()
+                            };
+                            upvalues.push(upvalue.clone());
+                            push!(func);
+                        } else {
+                            unreachable!();
+                        }
+                    } else {
+                        return Err("Cannot bind argument to non-user function".to_string());
                     }
                 }
 
@@ -919,6 +953,21 @@ mod tests {
     }
 
     #[test]
+    fn test_declare_global() {
+        let mut agent = Agent::new();
+        let ident_hello = agent.intern_string("hello");
+
+        let mut bytecode = Bytecode::new();
+        bytecode.declare_global(ident_hello);
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::Null));
+    }
+
+    #[test]
     fn test_store_global() {
         let mut agent = Agent::new();
         let mut global = HashMap::new();
@@ -1011,6 +1060,37 @@ mod tests {
             new_function 0 func1
             bind_local 0
             call 0
+            call 0
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(2334)));
+    }
+
+    #[test]
+    fn test_bind_argument() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            jump main
+
+        func1:
+            new_function 0 func2
+            bind_argument 0
+            return
+
+        func2:
+            load_upvalue 0
+            return
+
+        main:
+            const_int 2334
+            new_function 1 func1
+            call 1
             call 0
         };
 
