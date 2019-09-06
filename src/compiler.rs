@@ -110,7 +110,8 @@ impl Compiler {
     }
 
     pub fn compile<'a, T>(mut self, statements: T) -> CompileResult<Vec<u8>>
-    where T: Iterator<Item = &'a Statement>
+    where
+        T: Iterator<Item = &'a Statement>,
     {
         let mut state = CompilerState::new(None);
 
