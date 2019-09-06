@@ -1,5 +1,5 @@
 // When adding to this enum, make sure to add to TryFrom<u8>
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 #[repr(u8)]
 pub enum OpCode {
     Halt = 0,
@@ -95,5 +95,21 @@ impl std::convert::TryFrom<&u8> for OpCode {
 
     fn try_from(intval: &u8) -> Result<OpCode, Self::Error> {
         OpCode::try_from(*intval)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::convert::TryFrom;
+
+    #[test]
+    fn test_out_of_bounds() {
+        let n: u8 = 255;
+
+        let op: Result<OpCode, String> = OpCode::try_from(n);
+
+        assert_eq!(op, Err("255 is out of bounds for OpCode".to_string()));
     }
 }
