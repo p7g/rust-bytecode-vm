@@ -127,7 +127,7 @@ impl Compiler {
         match statement.value {
             StatementKind::Let { .. } => self.compile_let_statement(state, statement)?,
             StatementKind::Function { .. } => self.compile_function_statement(state, statement)?,
-            // StatementKind::If { .. } => self.compile_if_statement(state, statement),
+            StatementKind::If { .. } => self.compile_if_statement(state, statement)?,
             // StatementKind::For { .. } => self.compile_for_statement(state, statement),
             // StatementKind::While { .. } => self.compile_while_statement(state, statement),
             // StatementKind::Break => self.compile_break_statement(state, statement),
@@ -258,6 +258,60 @@ impl Compiler {
             unreachable!();
         }
     }
+
+    fn compile_if_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::If {
+            predicate,
+            then_body,
+            else_body,
+        } = &statement.value
+        {
+            let else_label = self.bytecode.new_label();
+            let end_label = self.bytecode.new_label();
+
+            self.compile_expression(state, &predicate)?;
+
+            self.bytecode.op(OpCode::JumpIfFalse);
+
+            if else_body.is_some() {
+                self.bytecode.address_of_auto(else_label);
+            } else {
+                self.bytecode.address_of_auto(end_label);
+            }
+
+            for statement in then_body {
+                self.compile_statement(state, &statement)?;
+            }
+
+            if let Some(else_body) = else_body {
+                self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
+                self.bytecode.mark_label(else_label);
+
+                for statement in else_body {
+                    self.compile_statement(state, &statement)?;
+                }
+            }
+
+            self.bytecode.mark_label(end_label);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        _expression: &Expression,
+    ) -> CompileResult<()> {
+        self.bytecode.const_null();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -339,6 +393,174 @@ mod tests {
         start:
             const_null
             return
+        end:
+        };
+        let expected = CodeObject::new(expected.into::<Vec<_>>());
+
+        println!("Expected:");
+        disassemble(&agent, &expected)?;
+        println!("Actual:");
+        disassemble(&agent, &bytecode)?;
+
+        assert_eq!(bytecode, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_statement_no_else() -> Result<(), String> {
+        let mut agent = Agent::new();
+
+        let ast = {
+            let input = "if null {}";
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
+                (Ok(mut acc), Ok(s)) => {
+                    acc.push(s);
+                    Ok(acc)
+                }
+                (Err(msg), _) => Err(msg),
+                (_, Err(msg)) => Err(msg),
+            })?
+        };
+
+        let compiler = Compiler::new();
+        let bytecode = CodeObject::new(compiler.compile(ast)?);
+
+        let mut expected = Bytecode::new();
+        bytecode! { (&mut expected)
+            const_null
+            jump_if_false end
+        end:
+        };
+        let expected = CodeObject::new(expected.into::<Vec<_>>());
+
+        println!("Expected:");
+        disassemble(&agent, &expected)?;
+        println!("Actual:");
+        disassemble(&agent, &bytecode)?;
+
+        assert_eq!(bytecode, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_statement() -> Result<(), String> {
+        let mut agent = Agent::new();
+
+        let ast = {
+            let input = "if null {} else {}";
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
+                (Ok(mut acc), Ok(s)) => {
+                    acc.push(s);
+                    Ok(acc)
+                }
+                (Err(msg), _) => Err(msg),
+                (_, Err(msg)) => Err(msg),
+            })?
+        };
+
+        let compiler = Compiler::new();
+        let bytecode = CodeObject::new(compiler.compile(ast)?);
+
+        let mut expected = Bytecode::new();
+        bytecode! { (&mut expected)
+            const_null
+            jump_if_false else_body
+            jump end
+        else_body:
+        end:
+        };
+        let expected = CodeObject::new(expected.into::<Vec<_>>());
+
+        println!("Expected:");
+        disassemble(&agent, &expected)?;
+        println!("Actual:");
+        disassemble(&agent, &bytecode)?;
+
+        assert_eq!(bytecode, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_statement_else_if() -> Result<(), String> {
+        let mut agent = Agent::new();
+
+        let ast = {
+            let input = "if null {} else if null {}";
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
+                (Ok(mut acc), Ok(s)) => {
+                    acc.push(s);
+                    Ok(acc)
+                }
+                (Err(msg), _) => Err(msg),
+                (_, Err(msg)) => Err(msg),
+            })?
+        };
+
+        let compiler = Compiler::new();
+        let bytecode = CodeObject::new(compiler.compile(ast)?);
+
+        let mut expected = Bytecode::new();
+        bytecode! { (&mut expected)
+            const_null
+            jump_if_false else_body
+            jump end
+        else_body:
+            const_null
+            jump_if_false end
+        end:
+        };
+        let expected = CodeObject::new(expected.into::<Vec<_>>());
+
+        println!("Expected:");
+        disassemble(&agent, &expected)?;
+        println!("Actual:");
+        disassemble(&agent, &bytecode)?;
+
+        assert_eq!(bytecode, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_statement_else_if_else() -> Result<(), String> {
+        let mut agent = Agent::new();
+
+        let ast = {
+            let input = "if null {} else if null {} else {}";
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
+                (Ok(mut acc), Ok(s)) => {
+                    acc.push(s);
+                    Ok(acc)
+                }
+                (Err(msg), _) => Err(msg),
+                (_, Err(msg)) => Err(msg),
+            })?
+        };
+
+        let compiler = Compiler::new();
+        let bytecode = CodeObject::new(compiler.compile(ast)?);
+
+        let mut expected = Bytecode::new();
+        bytecode! { (&mut expected)
+            const_null
+            jump_if_false else_body
+            jump end
+        else_body:
+            const_null
+            jump_if_false else_body2
+            jump end
+        else_body2:
         end:
         };
         let expected = CodeObject::new(expected.into::<Vec<_>>());
