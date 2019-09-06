@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::bytecode::Bytecode;
 use crate::opcode::OpCode;
 use crate::parser::{Expression, ExpressionKind, Statement, StatementKind};
