@@ -153,8 +153,8 @@ impl Compiler {
             value,
         } = &statement.value
         {
-            if let Some(_expression) = value {
-                unimplemented!();
+            if let Some(expression) = value {
+                self.compile_expression(state, &expression)?;
             } else {
                 self.bytecode.const_null();
             }
@@ -329,6 +329,46 @@ mod tests {
 
         let ast = {
             let input = "let test;";
+            let lexer = Lexer::new(input);
+            let parser = Parser::new(&mut agent, lexer);
+            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
+                (Ok(mut acc), Ok(s)) => {
+                    acc.push(s);
+                    Ok(acc)
+                }
+                (Err(msg), _) => Err(msg),
+                (_, Err(msg)) => Err(msg),
+            })?
+        };
+
+        let compiler = Compiler::new();
+        let bytecode = CodeObject::new(compiler.compile(ast)?);
+
+        let mut expected = Bytecode::new();
+        bytecode! { (&mut expected)
+            const_null
+            declare_global (ident_test)
+            store_global (ident_test)
+        };
+        let expected = CodeObject::new(expected.into::<Vec<_>>());
+
+        println!("Expected:");
+        disassemble(&agent, &expected)?;
+        println!("Actual:");
+        disassemble(&agent, &bytecode)?;
+
+        assert_eq!(bytecode, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_let_declaration_with_value() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let ast = {
+            let input = "let test = null;";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
             parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
