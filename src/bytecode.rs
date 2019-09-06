@@ -2,9 +2,12 @@ use crate::opcode::OpCode;
 use std::collections::HashMap;
 
 pub struct Bytecode {
-    instructions: Vec<u8>,
+    pub instructions: Vec<u8>,
     label_addresses: HashMap<&'static str, usize>,
     pending_addresses: HashMap<&'static str, Vec<usize>>,
+    // FIXME: dedupe this stuff
+    label_addresses_auto: Vec<Option<usize>>,
+    pending_addresses_auto: HashMap<usize, Vec<usize>>,
 }
 
 impl Bytecode {
@@ -13,6 +16,41 @@ impl Bytecode {
             instructions: Vec::new(),
             label_addresses: HashMap::new(),
             pending_addresses: HashMap::new(),
+            label_addresses_auto: Vec::new(),
+            pending_addresses_auto: HashMap::new(),
+        }
+    }
+
+    pub fn new_label(&mut self) -> usize {
+        self.label_addresses_auto.push(None);
+        self.label_addresses_auto.len() - 1
+    }
+
+    pub fn mark_label(&mut self, idx: usize) {
+        let address = self.instructions.len();
+        self.label_addresses_auto[idx] = Some(address);
+
+        if let Some(pending) = self.pending_addresses_auto.get(&idx) {
+            for p in pending.iter() {
+                for (i, b) in address.to_le_bytes().iter().enumerate() {
+                    self.instructions[p + i] = *b;
+                }
+            }
+        }
+    }
+
+    pub fn address_of_auto(&mut self, idx: usize) -> &mut Bytecode {
+        let maybe_addr = self.label_addresses_auto[idx];
+        if let Some(address) = maybe_addr {
+            self.usize(address)
+        } else {
+            let current_address = self.instructions.len();
+            self.pending_addresses_auto
+                .entry(idx)
+                .and_modify(|v| v.push(current_address))
+                .or_insert_with(|| vec![current_address]);
+
+            self.usize(0)
         }
     }
 

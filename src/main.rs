@@ -4,6 +4,7 @@ mod agent;
 #[macro_use]
 mod bytecode;
 mod code_object;
+mod compiler;
 mod disassemble;
 mod interpreter;
 mod module;
@@ -100,6 +101,20 @@ fn main() -> Result<(), String> {
     let result = interpreter.evaluate(code_object)?;
 
     println!("\n{:?}", result);
+
+    let mut agent = Agent::new();
+    let code = {
+        let lexer = parser::Lexer::new("hello;");
+        let parser = parser::Parser::new(&mut agent, lexer);
+        let statements = parser.filter_map(|s| s.ok());
+        // let compiler = compiler::Compiler::new(statements);
+        // compiler.compile()?
+        Vec::new()
+    };
+    let mut interpreter = Interpreter::new(&mut agent);
+    let result = interpreter.evaluate(CodeObject::new(code))?;
+
+    println!("From compiler: {:#?}", result);
 
     Ok(())
 }

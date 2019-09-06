@@ -335,8 +335,8 @@ impl<'a> Iterator for Lexer<'a> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Statement {
-    position: Position,
-    value: StatementKind,
+    pub position: Position,
+    pub value: StatementKind,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -374,8 +374,8 @@ pub enum StatementKind {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Expression {
-    position: Position,
-    value: ExpressionKind,
+    pub position: Position,
+    pub value: ExpressionKind,
 }
 
 #[derive(Debug, PartialEq, Clone)]
