@@ -291,13 +291,16 @@ impl<'a> Lexer<'a> {
                 }
 
                 '"' => {
+                    let mut buf = String::new();
                     while let Some(c) = self.peek_char() {
                         match c {
                             '\\' => {
                                 self.next_char();
                                 if let Some(c) = self.next_char() {
                                     match c {
-                                        'n' | 't' | '"' => {}
+                                        'n' => buf.push('\n'),
+                                        't' => buf.push('\t'),
+                                        '"' => buf.push('"'),
                                         _ => return error!("unrecognized escape sequence"),
                                     }
                                 } else {
@@ -309,12 +312,18 @@ impl<'a> Lexer<'a> {
                                 break;
                             }
                             _ => {
+                                buf.push(*c);
                                 self.next_char();
                             }
                         }
                     }
 
-                    token!(TokenType::String);
+                    return Some(Ok(Token::new(
+                        TokenType::String,
+                        start_line,
+                        start_column,
+                        buf.as_str(),
+                    )));
                 }
 
                 _ => return error!("Unexpected character '{}'", c),
@@ -800,9 +809,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_string_expression(&mut self, string: Token) -> ParseResult<Expression> {
-        let id = self
-            .agent
-            .intern_string(&string.text[1..string.text.len() - 1]);
+        let id = self.agent.intern_string(&string.text);
         Ok(Expression {
             position: string.position,
             value: ExpressionKind::String(id),
@@ -1041,7 +1048,7 @@ function
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
-            vec![Token::new(TokenType::String, 1, 1, r#""this is a string""#),]
+            vec![Token::new(TokenType::String, 1, 1, "this is a string"),]
         );
     }
 
@@ -1056,7 +1063,7 @@ function
                 TokenType::String,
                 1,
                 1,
-                r#""so I says, \"this\nis\tan escaped string\"""#
+                "so I says, \"this\nis\tan escaped string\""
             ),]
         );
     }
@@ -1083,7 +1090,7 @@ function
                 (TokenType::RightParen, ")".to_string()),
                 (TokenType::LeftBrace, "{".to_string()),
                 (TokenType::Return, "return".to_string()),
-                (TokenType::String, r#""hello world""#.to_string()),
+                (TokenType::String, "hello world".to_string()),
                 (TokenType::Semicolon, ";".to_string()),
                 (TokenType::RightBrace, "}".to_string()),
                 (TokenType::Identifier, "print".to_string()),

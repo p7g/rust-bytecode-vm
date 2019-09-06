@@ -4,7 +4,7 @@
     - associativity
     - precedence
 - [x] add function expression
-- [ ] replace string escapes with actual characters in lexer
+- [x] replace string escapes with actual characters in lexer
 - [ ] write compiler (AST -> bytecode)
 - [ ] import/export
     - decide: happens at runtime (by VM) or before
