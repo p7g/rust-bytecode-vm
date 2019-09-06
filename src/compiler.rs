@@ -334,14 +334,7 @@ mod tests {
             let input = "let test;";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -374,14 +367,7 @@ mod tests {
             let input = "let test = null;";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -414,14 +400,7 @@ mod tests {
             let input = "function test() {}";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -458,14 +437,7 @@ mod tests {
             let input = "if null {}";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -497,14 +469,7 @@ mod tests {
             let input = "if null {} else {}";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -538,14 +503,7 @@ mod tests {
             let input = "if null {} else if null {}";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
@@ -581,14 +539,7 @@ mod tests {
             let input = "if null {} else if null {} else {}";
             let lexer = Lexer::new(input);
             let parser = Parser::new(&mut agent, lexer);
-            parser.fold(Ok(Vec::new()), |acc, s| match (acc, s) {
-                (Ok(mut acc), Ok(s)) => {
-                    acc.push(s);
-                    Ok(acc)
-                }
-                (Err(msg), _) => Err(msg),
-                (_, Err(msg)) => Err(msg),
-            })?
+            parser.collect::<Result<Vec<Statement>, String>>()?
         };
 
         let compiler = Compiler::new();
