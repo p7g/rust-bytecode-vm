@@ -109,11 +109,13 @@ impl Compiler {
         }
     }
 
-    pub fn compile(mut self, statements: Vec<Statement>) -> CompileResult<Vec<u8>> {
+    pub fn compile<'a, T>(mut self, statements: T) -> CompileResult<Vec<u8>>
+    where T: Iterator<Item = &'a Statement>
+    {
         let mut state = CompilerState::new(None);
 
         for statement in statements {
-            self.compile_statement(&mut state, &statement)?;
+            self.compile_statement(&mut state, statement)?;
         }
 
         Ok(self.bytecode.into())
@@ -342,7 +344,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -382,7 +384,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -422,7 +424,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -466,7 +468,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -505,7 +507,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -546,7 +548,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
@@ -589,7 +591,7 @@ mod tests {
         };
 
         let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast)?);
+        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
 
         let mut expected = Bytecode::new();
         bytecode! { (&mut expected)
