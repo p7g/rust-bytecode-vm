@@ -131,7 +131,7 @@ impl Compiler {
             StatementKind::Let { .. } => self.compile_let_statement(state, statement)?,
             StatementKind::Function { .. } => self.compile_function_statement(state, statement)?,
             StatementKind::If { .. } => self.compile_if_statement(state, statement)?,
-            // StatementKind::For { .. } => self.compile_for_statement(state, statement),
+            StatementKind::For { .. } => self.compile_for_statement(state, statement)?,
             // StatementKind::While { .. } => self.compile_while_statement(state, statement),
             // StatementKind::Break => self.compile_break_statement(state, statement),
             // StatementKind::Continue => self.compile_continue_statement(state, statement),
@@ -299,6 +299,68 @@ impl Compiler {
                 }
             }
 
+            self.bytecode.mark_label(end_label);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_for_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::For {
+            initializer,
+            predicate,
+            increment,
+            body,
+        } = &statement.value
+        {
+            let start_label = self.bytecode.new_label();
+            let end_label = self.bytecode.new_label();
+            let increment_label = self.bytecode.new_label();
+
+            let loop_state = LoopState::For {
+                start_label,
+                end_label,
+                increment_label,
+            };
+
+            let inner_scope = Scope::new(state.scope.as_ref());
+            let mut inner_state = CompilerState::new(Some(inner_scope));
+
+            if let Some(initializer) = initializer {
+                self.compile_statement(&mut inner_state, &initializer)?;
+            }
+
+            // Only enter the loop state after compiling the initializer to
+            // prevent such monstrocities as:
+            // for break;; {}
+            inner_state.loop_state = Some(loop_state);
+
+            self.bytecode.mark_label(start_label);
+
+            if let Some(predicate) = predicate {
+                self.compile_expression(&mut inner_state, &predicate)?;
+                self.bytecode
+                    .op(OpCode::JumpIfFalse)
+                    .address_of_auto(end_label);
+            }
+
+            for statement in body {
+                self.compile_statement(&mut inner_state, &statement)?;
+            }
+
+            self.bytecode.mark_label(increment_label);
+
+            if let Some(increment) = increment {
+                self.compile_expression(&mut inner_state, increment)?;
+            }
+
+            self.bytecode.op(OpCode::Jump).address_of_auto(start_label);
             self.bytecode.mark_label(end_label);
 
             Ok(())
