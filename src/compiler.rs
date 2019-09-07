@@ -387,37 +387,60 @@ mod tests {
     use crate::disassemble::disassemble;
     use crate::parser::{Lexer, Parser};
 
+    macro_rules! test_statement {
+        ($input:expr, $expected:expr $(,)?) => {{
+            let agent = Agent::new();
+            test_statement!($input, $expected, agent)
+        }};
+        ($input:expr, $expected:expr, $agent:expr $(,)?) => {{
+            let mut agent = $agent;
+            let ast = {
+                let input = $input;
+                let lexer = Lexer::new(input);
+                let parser = Parser::new(&mut agent, lexer);
+                parser.collect::<Result<Vec<Statement>, String>>()?
+            };
+
+            let compiler = Compiler::new();
+            let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
+
+            let expected = CodeObject::new($expected.into::<Vec<_>>());
+
+            println!("Expected:");
+            disassemble(&agent, &expected)?;
+            println!("Actual:");
+            disassemble(&agent, &bytecode)?;
+
+            assert_eq!(bytecode, expected);
+
+            Ok(())
+        }};
+    }
+
+    macro_rules! bc {
+        ($($tt:tt)*) => {{
+            let mut bc = Bytecode::new();
+            bytecode! { (&mut bc)
+                $($tt)*
+            };
+            bc
+        }};
+    }
+
     #[test]
     fn test_let_declaration_without_value() -> Result<(), String> {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        let ast = {
-            let input = "let test;";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            declare_global (ident_test)
-            store_global (ident_test)
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "let test;",
+            bc! {
+                const_null
+                declare_global (ident_test)
+                store_global (ident_test)
+            },
+            agent,
+        )
     }
 
     #[test]
@@ -425,32 +448,15 @@ mod tests {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        let ast = {
-            let input = "let test = null;";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            declare_global (ident_test)
-            store_global (ident_test)
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "let test = null;",
+            bc! {
+                const_null
+                declare_global (ident_test)
+                store_global (ident_test)
+            },
+            agent,
+        )
     }
 
     #[test]
@@ -458,176 +464,91 @@ mod tests {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        let ast = {
-            let input = "function test() {}";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            new_function 0 start
-            declare_global (ident_test)
-            store_global (ident_test)
-            jump end
-        start:
-            const_null
-            return
-        end:
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "function test() {}",
+            bc! {
+                new_function 0 start
+                declare_global (ident_test)
+                store_global (ident_test)
+                jump end
+            start:
+                const_null
+                return
+            end:
+            },
+            agent,
+        )
     }
 
     #[test]
     fn test_if_statement_no_else() -> Result<(), String> {
-        let mut agent = Agent::new();
-
-        let ast = {
-            let input = "if null {}";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            jump_if_false end
-        end:
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "if null {}",
+            bc! {
+                const_null
+                jump_if_false end
+            end:
+            },
+        )
     }
 
     #[test]
     fn test_if_statement() -> Result<(), String> {
-        let mut agent = Agent::new();
-
-        let ast = {
-            let input = "if null {} else {}";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            jump_if_false else_body
-            jump end
-        else_body:
-        end:
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "if null {} else {}",
+            bc! {
+                const_null
+                jump_if_false else_body
+                jump end
+            else_body:
+            end:
+            },
+        )
     }
 
     #[test]
     fn test_if_statement_else_if() -> Result<(), String> {
-        let mut agent = Agent::new();
-
-        let ast = {
-            let input = "if null {} else if null {}";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            jump_if_false else_body
-            jump end
-        else_body:
-            const_null
-            jump_if_false end
-        end:
-        };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
-
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!(
+            "if null {} else if null {}",
+            bc! {
+                const_null
+                jump_if_false else_body
+                jump end
+            else_body:
+                const_null
+                jump_if_false end
+            end:
+            },
+        )
     }
 
     #[test]
     fn test_if_statement_else_if_else() -> Result<(), String> {
-        let mut agent = Agent::new();
+        test_statement!(
+            "if null {} else if null {} else {}",
+            bc! {
+                const_null
+                jump_if_false else_body
+                jump end
+            else_body:
+                const_null
+                jump_if_false else_body2
+                jump end
+            else_body2:
+            end:
+            },
+        )
+    }
 
-        let ast = {
-            let input = "if null {} else if null {} else {}";
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
-            parser.collect::<Result<Vec<Statement>, String>>()?
-        };
-
-        let compiler = Compiler::new();
-        let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
-
-        let mut expected = Bytecode::new();
-        bytecode! { (&mut expected)
-            const_null
-            jump_if_false else_body
-            jump end
-        else_body:
-            const_null
-            jump_if_false else_body2
-            jump end
-        else_body2:
+    #[test]
+    fn test_for_statement_no_stuff() -> Result<(), String> {
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+        start:
+            jump start
         end:
         };
-        let expected = CodeObject::new(expected.into::<Vec<_>>());
 
-        println!("Expected:");
-        disassemble(&agent, &expected)?;
-        println!("Actual:");
-        disassemble(&agent, &bytecode)?;
-
-        assert_eq!(bytecode, expected);
-
-        Ok(())
+        test_statement!("for ;; {}", bytecode,)
     }
 }
