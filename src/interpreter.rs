@@ -506,8 +506,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::ArrayGet => {
-                    let array = pop!();
                     let idx = pop!();
+                    let array = pop!();
 
                     if let Value::Integer(idx) = idx {
                         if let Value::Array(array) = array {
@@ -526,8 +526,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::ArraySet => {
-                    let array = pop!();
                     let idx = pop!();
+                    let array = pop!();
 
                     if let Value::Integer(idx) = idx {
                         if let Value::Array(array) = array {
@@ -1275,8 +1275,8 @@ mod tests {
 
         let mut bytecode = Bytecode::new();
         bytecode! { (&mut bytecode)
-            const_int 1
             load_global array
+            const_int 1
             array_get
         };
 
@@ -1299,9 +1299,10 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode! { (&mut bytecode)
             const_int 9229
-            const_int 1
             load_global array
+            const_int 1
             array_set
+            pop
             load_global array
         };
 
