@@ -133,8 +133,8 @@ impl Compiler {
             StatementKind::If { .. } => self.compile_if_statement(state, statement)?,
             StatementKind::For { .. } => self.compile_for_statement(state, statement)?,
             StatementKind::While { .. } => self.compile_while_statement(state, statement)?,
-            // StatementKind::Break => self.compile_break_statement(state, statement),
-            // StatementKind::Continue => self.compile_continue_statement(state, statement),
+            StatementKind::Break => self.compile_break_statement(state, statement)?,
+            StatementKind::Continue => self.compile_continue_statement(state, statement)?,
             // StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
             _ => unimplemented!(),
         };
@@ -412,6 +412,54 @@ impl Compiler {
         }
     }
 
+    fn compile_break_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if StatementKind::Break == statement.value {
+            if let Some(loop_state) = &state.loop_state {
+                let end_label = *match loop_state {
+                    LoopState::While { end_label, .. } => end_label,
+                    LoopState::For { end_label, .. } => end_label,
+                };
+
+                self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
+
+                Ok(())
+            } else {
+                Err("Unexpected break outside of loop context".to_string())
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_continue_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if StatementKind::Continue == statement.value {
+            if let Some(loop_state) = &state.loop_state {
+                let start_label = *match loop_state {
+                    LoopState::While { start_label, .. } => start_label,
+                    LoopState::For {
+                        increment_label, ..
+                    } => increment_label,
+                };
+
+                self.bytecode.op(OpCode::Jump).address_of_auto(start_label);
+
+                Ok(())
+            } else {
+                Err("Unexpected break outside of loop context".to_string())
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
     fn compile_expression(
         &mut self,
         _state: &mut CompilerState,
@@ -625,6 +673,61 @@ mod tests {
             start:
                 const_null
                 jump_if_false end
+                jump start
+            end:
+            },
+        )
+    }
+
+    #[test]
+    fn test_break_statement_valid() -> Result<(), String> {
+        test_statement!(
+            "while null { break; }",
+            bc! {
+            start:
+                const_null
+                jump_if_false end
+                jump end
+                jump start
+            end:
+            },
+        )
+    }
+
+    fn break_statement_invalid() -> Result<(), String> {
+        test_statement!("break;", bc! {})
+    }
+
+    #[test]
+    fn test_break_statement_invalid() {
+        assert!(break_statement_invalid().is_err());
+    }
+
+    #[test]
+    fn test_continue_statement_while() -> Result<(), String> {
+        test_statement!(
+            "while null { continue; }",
+            bc! {
+            start:
+                const_null
+                jump_if_false end
+                jump start
+                jump start
+            end:
+            },
+        )
+    }
+
+    #[test]
+    fn test_continue_statement_for() -> Result<(), String> {
+        test_statement!(
+            "for ;; null { continue; }",
+            bc! {
+            start:
+                jump inc
+            inc:
+                const_null
+                pop
                 jump start
             end:
             },
