@@ -136,18 +136,16 @@ impl Compiler {
         statement: &Statement,
     ) -> CompileResult<()> {
         match statement.value {
-            StatementKind::Let { .. } => self.compile_let_statement(state, statement)?,
-            StatementKind::Function { .. } => self.compile_function_statement(state, statement)?,
-            StatementKind::If { .. } => self.compile_if_statement(state, statement)?,
-            StatementKind::For { .. } => self.compile_for_statement(state, statement)?,
-            StatementKind::While { .. } => self.compile_while_statement(state, statement)?,
-            StatementKind::Break => self.compile_break_statement(state, statement)?,
-            StatementKind::Continue => self.compile_continue_statement(state, statement)?,
-            StatementKind::Expression(_) => self.compile_expression_statement(state, statement)?,
-            _ => unimplemented!(),
-        };
-
-        Ok(())
+            StatementKind::Let { .. } => self.compile_let_statement(state, statement),
+            StatementKind::Function { .. } => self.compile_function_statement(state, statement),
+            StatementKind::If { .. } => self.compile_if_statement(state, statement),
+            StatementKind::For { .. } => self.compile_for_statement(state, statement),
+            StatementKind::While { .. } => self.compile_while_statement(state, statement),
+            StatementKind::Break => self.compile_break_statement(state, statement),
+            StatementKind::Continue => self.compile_continue_statement(state, statement),
+            StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
+            StatementKind::Return(_) => self.compile_return_statement(state, statement),
+        }
     }
 
     fn compile_let_statement(
@@ -183,6 +181,107 @@ impl Compiler {
         }
     }
 
+    fn compile_function(
+        &mut self,
+        state: &mut CompilerState,
+        name: Option<usize>,
+        parameters: &Vec<Expression>,
+        body: &Vec<Statement>,
+    ) -> CompileResult<()> {
+        let start_label = self.bytecode.new_label();
+        let end_label = self.bytecode.new_label();
+
+        self.bytecode
+            .op(OpCode::NewFunction)
+            .usize(parameters.len()) // FIXME: This probably won't work with varargs
+            .address_of_auto(start_label);
+
+        if let Some(name) = name {
+            if state.is_global {
+                self.bytecode.declare_global(name).store_global(name).pop();
+            } else {
+                state
+                    .scope
+                    .as_mut()
+                    .ok_or_else(|| "Missing scope in local scope".to_string())?
+                    .push_binding(BindingType::Local, name);
+            }
+        }
+
+        let mut inner_scope = Scope::new(state.scope.as_ref());
+
+        for (i, parameter) in parameters.iter().enumerate() {
+            if let ExpressionKind::Identifier(id) = parameter.value {
+                inner_scope.bindings.push(Binding {
+                    name: id,
+                    index: i,
+                    typ: BindingType::Argument,
+                });
+            } else {
+                return Err("Invalid parameter".to_string());
+            }
+        }
+
+        let mut inner_state = CompilerState::new(false, Some(inner_scope));
+        inner_state.function_state = Some(FunctionState::new(start_label, end_label));
+
+        self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
+        self.bytecode.mark_label(start_label);
+
+        for statement in body {
+            self.compile_statement(&mut inner_state, &statement)?;
+        }
+
+        let ret_code: u8 = OpCode::Return.into();
+        if *self.bytecode.instructions.last().unwrap() != ret_code {
+            self.bytecode.const_null().ret();
+        }
+
+        self.bytecode.mark_label(end_label);
+
+        for (i, free_variable) in inner_state
+            .function_state
+            .unwrap()
+            .free_variables
+            .iter()
+            .enumerate()
+        {
+            if let Some(binding) = state
+                .scope
+                .as_ref()
+                .unwrap()
+                .get_binding(*free_variable)
+            {
+                match binding.typ {
+                    BindingType::Local => self.bytecode.bind_local(binding.index),
+                    BindingType::Argument => self.bytecode.bind_argument(binding.index),
+                    BindingType::Upvalue => self.bytecode.bind_upvalue(binding.index),
+                };
+            //} else if state.scope.is_some() && state.scope.as_ref().unwrap().get_binding(*free_variable).is_some() {
+            //    let binding = state.scope.as_ref().unwrap().get_binding(*free_variable);
+            //    match binding.typ {
+            //        BindingType::Argument =>
+            //    }
+            } else if let Some(scope) = &inner_state.scope {
+                if scope.parent_has_binding(*free_variable) {
+                    if let Some(function_state) = &mut state.function_state {
+                        function_state.free_variables.push(*free_variable);
+                        self.bytecode
+                            .bind_upvalue(scope.binding_count[BindingType::Upvalue as usize] + i);
+                    } else {
+                        unreachable!();
+                    }
+                } else {
+                    unreachable!();
+                }
+            } else {
+                unreachable!();
+            }
+        }
+
+        Ok(())
+    }
+
     fn compile_function_statement(
         &mut self,
         state: &mut CompilerState,
@@ -198,71 +297,24 @@ impl Compiler {
             body,
         } = &statement.value
         {
-            let start_label = self.bytecode.new_label();
-            let end_label = self.bytecode.new_label();
+            self.compile_function(state, Some(*name), parameters, body)
+        } else {
+            unreachable!();
+        }
+    }
 
-            self.bytecode
-                .op(OpCode::NewFunction)
-                .usize(parameters.len()) // FIXME: This probably won't work with varargs
-                .address_of_auto(start_label);
-
-            if state.is_global {
-                self.bytecode.declare_global(*name).store_global(*name);
+    fn compile_return_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::Return(expr) = &statement.value {
+            if let Some(expr) = expr {
+                self.compile_expression(state, expr)?;
             } else {
-                state
-                    .scope
-                    .as_mut()
-                    .ok_or_else(|| "Missing scope in local scope".to_string())?
-                    .push_binding(BindingType::Local, *name);
+                self.bytecode.const_null();
             }
-
-            let mut inner_scope = Scope::new(state.scope.as_ref());
-
-            for (i, parameter) in parameters.iter().enumerate() {
-                if let ExpressionKind::Identifier(id) = parameter.value {
-                    inner_scope.bindings.push(Binding {
-                        name: id,
-                        index: i,
-                        typ: BindingType::Argument,
-                    });
-                } else {
-                    return Err("Invalid parameter".to_string());
-                }
-            }
-
-            let mut inner_state = CompilerState::new(Some(inner_scope));
-            inner_state.function_state = Some(FunctionState::new(start_label, end_label));
-
-            self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
-            self.bytecode.mark_label(start_label);
-
-            for statement in body {
-                self.compile_statement(&mut inner_state, &statement)?;
-            }
-
-            let ret_code: u8 = OpCode::Return.into();
-            if *self.bytecode.instructions.last().unwrap() != ret_code {
-                self.bytecode.const_null().ret();
-            }
-
-            self.bytecode.mark_label(end_label);
-
-            for free_variable in inner_state.function_state.unwrap().free_variables {
-                if let Some(binding) = inner_state
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .get_binding(free_variable)
-                {
-                    match binding.typ {
-                        BindingType::Local => self.bytecode.bind_local(binding.index),
-                        BindingType::Argument => self.bytecode.bind_argument(binding.index),
-                        BindingType::Upvalue => self.bytecode.bind_upvalue(binding.index),
-                    };
-                } else {
-                    unreachable!();
-                }
-            }
+            self.bytecode.ret();
 
             Ok(())
         } else {
