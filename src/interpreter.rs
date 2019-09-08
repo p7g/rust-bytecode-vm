@@ -505,6 +505,15 @@ impl<'a> Interpreter<'a> {
                     push!(Value::from(vec![Value::Null; len]));
                 }
 
+                OpCode::NewArrayWithValues => {
+                    let num_values = usize::from_le_bytes(next!(8));
+                    let mut values = Vec::with_capacity(num_values);
+                    for _ in 0..num_values {
+                        values.push(pop!());
+                    }
+                    push!(Value::from(values));
+                }
+
                 OpCode::ArrayGet => {
                     let idx = pop!();
                     let array = pop!();

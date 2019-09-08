@@ -659,13 +659,11 @@ impl Compiler {
         expression: &Expression,
     ) -> CompileResult<()> {
         if let ExpressionKind::Array(exprs) = &expression.value {
-            self.bytecode.new_array(exprs.len());
-
-            for (i, expr) in exprs.iter().enumerate() {
-                self.bytecode.usize(i);
+            for expr in exprs {
                 self.compile_expression(state, expr)?;
-                self.bytecode.array_set();
             }
+
+            self.bytecode.new_array_with_values(exprs.len());
 
             Ok(())
         } else {

@@ -241,6 +241,10 @@ impl Bytecode {
         self.op(OpCode::NewArray).usize(len)
     }
 
+    pub fn new_array_with_values(&mut self, len: usize) -> &mut Bytecode {
+        self.op(OpCode::NewArrayWithValues).usize(len)
+    }
+
     pub fn array_get(&mut self) -> &mut Bytecode {
         self.op(OpCode::ArrayGet)
     }
@@ -505,6 +509,12 @@ macro_rules! bytecode {
     (($builder:expr) new_array $id:tt $($tt:tt)*) => {{
         bytecode! {
             ($builder.new_array($id))
+            $($tt)*
+        }
+    }};
+    (($builder:expr) new_array_with_values $id:tt $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.new_array_with_values($id))
             $($tt)*
         }
     }};
