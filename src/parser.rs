@@ -396,7 +396,6 @@ pub enum ExpressionKind {
     Null,
     Array(Vec<Expression>),
     Function {
-        name: Option<Box<Expression>>,
         parameters: Vec<Expression>,
         body: Vec<Statement>,
     },
@@ -902,14 +901,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_expression(&mut self, functionkw: Token) -> ParseResult<Expression> {
-        let name = if self.matches(TokenType::LeftParen)? {
-            None
-        } else {
-            let ident = self.expect(TokenType::Identifier)?;
-            let ident = self.parse_identifier_expression(ident)?;
-            self.expect(TokenType::LeftParen)?;
-            Some(Box::new(ident))
-        };
+        self.expect(TokenType::LeftParen)?;
 
         let parameters = self.parse_list(
             TokenType::RightParen,
@@ -927,11 +919,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expression {
             position: functionkw.position,
-            value: ExpressionKind::Function {
-                name,
-                parameters,
-                body,
-            },
+            value: ExpressionKind::Function { parameters, body },
         })
     }
 }
@@ -2188,7 +2176,6 @@ return 1;
         test_expression!(
             "(function() {});",
             ExpressionKind::Function {
-                name: None,
                 parameters: Vec::new(),
                 body: Vec::new(),
             },
