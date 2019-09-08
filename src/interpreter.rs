@@ -326,11 +326,10 @@ impl<'a> Interpreter<'a> {
                         }
                     }
 
+                    pop!(num_args + self.sp - self.bp);
+
                     self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
                     self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
-
-                    // minus one for the expression being returned
-                    pop!(num_args + self.sp - self.bp - 1);
                     push!(retval);
                 }
 
