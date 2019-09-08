@@ -366,7 +366,7 @@ impl<'a> Interpreter<'a> {
                 OpCode::StoreGlobal => {
                     let id = usize::from_le_bytes(next!(8));
                     if self.global.contains_key(&id) {
-                        self.global.insert(id, pop!());
+                        self.global.insert(id, top!().clone());
                     } else {
                         return Err(format!(
                             "ReferenceError: {} is not defined",
