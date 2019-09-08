@@ -329,36 +329,36 @@ impl Compiler {
                 increment_label,
             };
 
-            let inner_scope = Scope::new(state.scope.as_ref());
-            let mut inner_state = CompilerState::new(Some(inner_scope));
-
             if let Some(initializer) = initializer {
-                self.compile_statement(&mut inner_state, &initializer)?;
+                self.compile_statement(state, &initializer)?;
             }
 
             // Only enter the loop state after compiling the initializer to
             // prevent such monstrocities as:
             // for break;; {}
-            inner_state.loop_state = Some(loop_state);
+            let old_loop_state = state.loop_state.take();
+            state.loop_state = Some(loop_state);
 
             self.bytecode.mark_label(start_label);
 
             if let Some(predicate) = predicate {
-                self.compile_expression(&mut inner_state, &predicate)?;
+                self.compile_expression(state, &predicate)?;
                 self.bytecode
                     .op(OpCode::JumpIfFalse)
                     .address_of_auto(end_label);
             }
 
             for statement in body {
-                self.compile_statement(&mut inner_state, &statement)?;
+                self.compile_statement(state, &statement)?;
             }
 
             self.bytecode.mark_label(increment_label);
 
             if let Some(increment) = increment {
-                self.compile_expression(&mut inner_state, increment)?;
+                self.compile_expression(state, increment)?;
             }
+
+            state.loop_state = old_loop_state;
 
             self.bytecode.op(OpCode::Jump).address_of_auto(start_label);
             self.bytecode.mark_label(end_label);
