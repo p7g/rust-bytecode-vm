@@ -249,6 +249,10 @@ impl Bytecode {
         self.op(OpCode::ArraySet)
     }
 
+    pub fn equal(&mut self) -> &mut Bytecode {
+        self.op(OpCode::Equal)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -513,6 +517,12 @@ macro_rules! bytecode {
     (($builder:expr) array_set $($tt:tt)*) => {{
         bytecode! {
             ($builder.array_set())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) equal $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.equal())
             $($tt)*
         }
     }};

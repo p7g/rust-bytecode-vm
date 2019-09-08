@@ -545,6 +545,13 @@ impl<'a> Interpreter<'a> {
                         return Err("Array index must be an integer".to_string());
                     }
                 }
+
+                OpCode::Equal => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left == right));
+                }
             }
         }
 
