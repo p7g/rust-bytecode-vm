@@ -79,25 +79,17 @@ fn main() -> Result<(), String> {
     let code = {
         let lexer = parser::Lexer::new(
             r#"
-function point(x, y) {
-    function getx()  { return x; }
-    function setx(n) { x = n; }
-    function gety()  { return y; }
-    function sety(n) { y = n; }
-
-    return function(message, args) {
-        if message == "getx" {
-            return getx();
-        }
-        if message == "gety" {
-            return gety();
-        }
-    };
+function factorial(n) {
+    if n == 1 {
+        return 1;
+    }
+    if n == 2 {
+        return 2;
+    }
+    return n * factorial(n - 1);
 }
 
-let p = point(1, 2);
-
-print("x:", p("getx", []), "y:", p("gety", []));
+print(factorial(10));
 "#,
         );
         let parser = parser::Parser::new(&mut agent, lexer);

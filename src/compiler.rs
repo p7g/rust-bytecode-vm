@@ -766,10 +766,17 @@ impl Compiler {
                         _ => unimplemented!(),
                     }
                 }
-                TokenType::EqualEqual => {
+                TokenType::EqualEqual
+                | TokenType::Star
+                | TokenType::Minus => {
                     self.compile_expression(state, left)?;
                     self.compile_expression(state, right)?;
-                    self.bytecode.equal();
+                    match op {
+                        TokenType::EqualEqual => self.bytecode.equal(),
+                        TokenType::Star => self.bytecode.mul(),
+                        TokenType::Minus => self.bytecode.sub(),
+                        _ => unimplemented!(),
+                    };
                 }
                 _ => unimplemented!(),
             }
