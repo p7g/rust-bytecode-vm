@@ -248,12 +248,7 @@ impl Compiler {
             .iter()
             .enumerate()
         {
-            if let Some(binding) = state
-                .scope
-                .as_ref()
-                .unwrap()
-                .get_binding(*free_variable)
-            {
+            if let Some(binding) = state.scope.as_ref().unwrap().get_binding(*free_variable) {
                 match binding.typ {
                     BindingType::Local => self.bytecode.bind_local(binding.index),
                     BindingType::Argument => self.bytecode.bind_argument(binding.index),
