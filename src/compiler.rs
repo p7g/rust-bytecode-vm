@@ -1,6 +1,6 @@
 use crate::bytecode::Bytecode;
 use crate::opcode::OpCode;
-use crate::parser::{Expression, ExpressionKind, Statement, StatementKind};
+use crate::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
 
 pub type CompileResult<T> = Result<T, String>;
 
@@ -168,8 +168,10 @@ impl Compiler {
                 self.bytecode.const_null();
             }
             if state.is_global {
-                self.bytecode.declare_global(*name);
-                self.bytecode.store_global(*name);
+                self.bytecode
+                    .declare_global(*name)
+                    .store_global(*name)
+                    .pop();
             } else if let Some(scope) = &mut state.scope {
                 scope.push_binding(BindingType::Local, *name);
             } else {
@@ -537,11 +539,252 @@ impl Compiler {
 
     fn compile_expression(
         &mut self,
-        _state: &mut CompilerState,
-        _expression: &Expression,
+        state: &mut CompilerState,
+        expression: &Expression,
     ) -> CompileResult<()> {
-        self.bytecode.const_null();
-        Ok(())
+        match expression.value {
+            ExpressionKind::Identifier(_) => self.compile_identifier_expression(state, expression),
+            ExpressionKind::Integer(_) => self.compile_integer_expression(state, expression),
+            ExpressionKind::Double(_) => self.compile_double_expression(state, expression),
+            ExpressionKind::String(_) => self.compile_string_expression(state, expression),
+            ExpressionKind::Null => self.compile_null_expression(state, expression),
+            ExpressionKind::Array(_) => self.compile_array_expression(state, expression),
+            ExpressionKind::Function { .. } => self.compile_function_expression(state, expression),
+            // ExpressionKind::UnaryOperation(..) => self.compile_unary_operation_expression(state, expression),
+            ExpressionKind::BinaryOperation(..) => {
+                self.compile_binary_operation_expression(state, expression)
+            }
+            ExpressionKind::Call(..) => self.compile_call_expression(state, expression),
+            // ExpressionKind::Index(..) => self.compile_index_expression(state, expression),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn compile_identifier_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Identifier(id) = expression.value {
+            if let Some(scope) = &state.scope {
+                if let Some(binding) = scope.get_binding(id) {
+                    match binding.typ {
+                        BindingType::Argument => self.bytecode.load_argument(binding.index),
+                        BindingType::Local => self.bytecode.load_local(binding.index),
+                        BindingType::Upvalue => {
+                            if state.function_state.is_some() {
+                                self.bytecode.load_upvalue(binding.index)
+                            } else {
+                                return Err(
+                                    "Attempting to load upvalue when not in function".to_string()
+                                );
+                            }
+                        }
+                    };
+                } else if let Some(function_state) = &mut state.function_state {
+                    if scope.parent_has_binding(id) {
+                        self.bytecode.load_upvalue(
+                            scope.binding_count[BindingType::Upvalue as usize]
+                                + function_state.free_variables.len(),
+                        );
+                        function_state.free_variables.push(id);
+                    } else {
+                        self.bytecode.load_global(id);
+                    }
+                }
+            } else {
+                self.bytecode.load_global(id);
+            }
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_integer_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Integer(n) = expression.value {
+            self.bytecode.const_int(n);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_double_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Double(n) = expression.value {
+            self.bytecode.const_double(n);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_string_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::String(s) = expression.value {
+            self.bytecode.const_string(s);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_null_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if ExpressionKind::Null == expression.value {
+            self.bytecode.const_null();
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_array_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Array(exprs) = &expression.value {
+            self.bytecode.new_array(exprs.len());
+
+            for (i, expr) in exprs.iter().enumerate() {
+                self.bytecode.usize(i);
+                self.compile_expression(state, expr)?;
+                self.bytecode.array_set();
+            }
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_function_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Function { parameters, body } = &expression.value {
+            self.compile_function(state, None, parameters, body)
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_call_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Call(func, args) = &expression.value {
+            for arg in args.iter().rev() {
+                self.compile_expression(state, arg)?;
+            }
+
+            self.compile_expression(state, func)?;
+            self.bytecode.call(args.len());
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_binary_operation_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::BinaryOperation(left, op, right) = &expression.value {
+            match op {
+                TokenType::Equal => {
+                    self.compile_expression(state, right)?;
+                    match left.as_ref().value {
+                        ExpressionKind::Identifier(id) => {
+                            if let Some(scope) = &state.scope {
+                                if let Some(binding) = scope.get_binding(id) {
+                                    match binding.typ {
+                                        BindingType::Argument => {
+                                            self.bytecode.store_argument(binding.index)
+                                        }
+                                        BindingType::Local => {
+                                            self.bytecode.store_local(binding.index)
+                                        }
+                                        BindingType::Upvalue => {
+                                            self.bytecode.store_upvalue(binding.index)
+                                        }
+                                    };
+                                } else if scope.parent_has_binding(id) {
+                                    if let Some(idx) = state
+                                        .function_state
+                                        .as_ref()
+                                        .unwrap()
+                                        .free_variables
+                                        .iter()
+                                        .position(|v| *v == id)
+                                    {
+                                        self.bytecode.store_upvalue(
+                                            scope.binding_count[BindingType::Upvalue as usize]
+                                                + idx,
+                                        );
+                                    } else {
+                                        self.bytecode.store_upvalue(
+                                            scope.binding_count[BindingType::Upvalue as usize]
+                                                + state
+                                                    .function_state
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .free_variables
+                                                    .len(),
+                                        );
+                                        state
+                                            .function_state
+                                            .as_mut()
+                                            .unwrap()
+                                            .free_variables
+                                            .push(id);
+                                    }
+                                } else {
+                                    self.bytecode.store_global(id);
+                                }
+                            } else {
+                                self.bytecode.store_global(id);
+                            }
+                        }
+                        _ => unimplemented!(),
+                    }
+                }
+                TokenType::EqualEqual => {
+                    self.compile_expression(state, left)?;
+                    self.compile_expression(state, right)?;
+                    self.bytecode.equal();
+                }
+                _ => unimplemented!(),
+            }
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
     }
 }
 
@@ -604,6 +847,7 @@ mod tests {
                 const_null
                 declare_global (ident_test)
                 store_global (ident_test)
+                pop
             },
             agent,
         )
@@ -620,6 +864,7 @@ mod tests {
                 const_null
                 declare_global (ident_test)
                 store_global (ident_test)
+                pop
             },
             agent,
         )
@@ -636,6 +881,7 @@ mod tests {
                 new_function 0 start
                 declare_global (ident_test)
                 store_global (ident_test)
+                pop
                 jump end
             start:
                 const_null
@@ -727,6 +973,7 @@ mod tests {
                 const_null
                 declare_global (ident_a)
                 store_global (ident_a)
+                pop
             start:
                 const_null
                 jump_if_false end
