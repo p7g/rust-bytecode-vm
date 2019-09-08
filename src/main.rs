@@ -47,27 +47,6 @@ fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
 
 fn main() -> Result<(), String> {
     let mut agent = Agent::new();
-
-    let mut bytecode = Bytecode::new();
-    bytecode! { (&mut bytecode)
-        const_int 3
-        const_int 4
-        load_global (agent.intern_string("print"))
-        call 2
-        jump_if_true 0
-        const_int 2
-        load_global (agent.intern_string("to_string"))
-        call 1
-        jump_if_false 0
-        const_int 1
-        load_global (agent.intern_string("type_of"))
-        call 1
-    };
-
-    let code_object = CodeObject::new(bytecode.into());
-
-    disassemble(&agent, &code_object)?;
-
     let mut global = HashMap::new();
 
     global.insert(
@@ -97,24 +76,40 @@ fn main() -> Result<(), String> {
         }),
     );
 
-    let mut interpreter = Interpreter::with_global(&mut agent, global);
-    let result = interpreter.evaluate(code_object)?;
-
-    println!("\n{:?}", result);
-
-    let mut agent = Agent::new();
     let code = {
-        let lexer = parser::Lexer::new("hello;");
-        let parser = parser::Parser::new(&mut agent, lexer);
-        let statements = parser.filter_map(|s| s.ok());
-        // let compiler = compiler::Compiler::new(statements);
-        // compiler.compile()?
-        Vec::new()
-    };
-    let mut interpreter = Interpreter::new(&mut agent);
-    let result = interpreter.evaluate(CodeObject::new(code))?;
+        let lexer = parser::Lexer::new(
+            r#"
+function point(x, y) {
+    function getx()  { return x; }
+    function setx(n) { x = n; }
+    function gety()  { return y; }
+    function sety(n) { y = n; }
 
-    println!("From compiler: {:#?}", result);
+    return function(message, args) {
+        if message == "getx" {
+            return getx();
+        }
+        if message == "gety" {
+            return gety();
+        }
+    };
+}
+
+let p = point(1, 2);
+
+print("x:", p("getx", []), "y:", p("gety", []));
+"#,
+        );
+        let parser = parser::Parser::new(&mut agent, lexer);
+        let statements = parser.collect::<Result<Vec<_>, String>>()?;
+        let compiler = compiler::Compiler::new();
+        compiler.compile(statements.iter())?
+    };
+
+    let code_object = CodeObject::new(code);
+    // disassemble(&agent, &code_object)?;
+    let mut interpreter = Interpreter::with_global(&mut agent, global);
+    interpreter.evaluate(code_object)?;
 
     Ok(())
 }
