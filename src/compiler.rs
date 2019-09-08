@@ -132,7 +132,7 @@ impl Compiler {
             StatementKind::Function { .. } => self.compile_function_statement(state, statement)?,
             StatementKind::If { .. } => self.compile_if_statement(state, statement)?,
             StatementKind::For { .. } => self.compile_for_statement(state, statement)?,
-            // StatementKind::While { .. } => self.compile_while_statement(state, statement),
+            StatementKind::While { .. } => self.compile_while_statement(state, statement)?,
             // StatementKind::Break => self.compile_break_statement(state, statement),
             // StatementKind::Continue => self.compile_continue_statement(state, statement),
             // StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
@@ -369,6 +369,48 @@ impl Compiler {
         }
     }
 
+    fn compile_while_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::While { predicate, body } = &statement.value {
+            let start_label = self.bytecode.new_label();
+            let end_label = self.bytecode.new_label();
+
+            let loop_state = LoopState::While {
+                start_label,
+                end_label,
+            };
+
+            // Only enter the loop state after compiling the initializer to
+            // prevent such monstrocities as:
+            // for break;; {}
+            let old_loop_state = state.loop_state.take();
+            state.loop_state = Some(loop_state);
+
+            self.bytecode.mark_label(start_label);
+
+            self.compile_expression(state, &predicate)?;
+            self.bytecode
+                .op(OpCode::JumpIfFalse)
+                .address_of_auto(end_label);
+
+            for statement in body {
+                self.compile_statement(state, &statement)?;
+            }
+
+            state.loop_state = old_loop_state;
+
+            self.bytecode.op(OpCode::Jump).address_of_auto(start_label);
+            self.bytecode.mark_label(end_label);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
     fn compile_expression(
         &mut self,
         _state: &mut CompilerState,
@@ -542,13 +584,26 @@ mod tests {
 
     #[test]
     fn test_for_statement_no_stuff() -> Result<(), String> {
-        let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-        start:
-            jump start
-        end:
-        };
+        test_statement!(
+            "for ;; {}",
+            bc! {
+                start:
+                    jump start
+            },
+        )
+    }
 
-        test_statement!("for ;; {}", bytecode,)
+    #[test]
+    fn test_while_statement() -> Result<(), String> {
+        test_statement!(
+            "while null {}",
+            bc! {
+            start:
+                const_null
+                jump_if_false end
+                jump start
+            end:
+            },
+        )
     }
 }
