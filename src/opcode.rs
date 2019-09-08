@@ -37,6 +37,7 @@ pub enum OpCode {
     NewArray,
     ArrayGet,
     ArraySet,
+    Equal,
 }
 
 impl Into<u8> for OpCode {
@@ -85,6 +86,7 @@ impl std::convert::TryFrom<u8> for OpCode {
             32 => OpCode::NewArray,
             33 => OpCode::ArrayGet,
             34 => OpCode::ArraySet,
+            35 => OpCode::Equal,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

@@ -91,7 +91,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::Return
             | OpCode::Pop
             | OpCode::ArrayGet
-            | OpCode::ArraySet => println!("{:?}", instruction),
+            | OpCode::ArraySet
+            | OpCode::Equal => println!("{:?}", instruction),
         }
     }
 
