@@ -356,6 +356,7 @@ impl Compiler {
 
             if let Some(increment) = increment {
                 self.compile_expression(state, increment)?;
+                self.bytecode.pop();
             }
 
             state.loop_state = old_loop_state;
@@ -590,6 +591,29 @@ mod tests {
                 start:
                     jump start
             },
+        )
+    }
+
+    #[test]
+    fn test_for_statement() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_a = agent.intern_string("a");
+        test_statement!(
+            "for let a; null; null {}",
+            bc! {
+                const_null
+                declare_global (ident_a)
+                store_global (ident_a)
+            start:
+                const_null
+                jump_if_false end
+            inc:
+                const_null
+                pop
+                jump start
+            end:
+            },
+            agent,
         )
     }
 
