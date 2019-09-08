@@ -75,6 +75,14 @@ impl<'a> Scope<'a> {
         self.bindings.iter().rev().any(|b| b.name == name)
     }
 
+    pub fn parent_has_binding(&self, name: usize) -> bool {
+        if let Some(parent) = self.parent {
+            parent.has_binding(name) || parent.parent_has_binding(name)
+        } else {
+            false
+        }
+    }
+
     pub fn get_binding(&self, name: usize) -> Option<&Binding> {
         self.bindings.iter().rev().find(|b| b.name == name)
     }
@@ -88,9 +96,9 @@ struct CompilerState<'a> {
 }
 
 impl<'a> CompilerState<'a> {
-    pub fn new(scope: Option<Scope<'a>>) -> CompilerState<'a> {
+    pub fn new(is_global: bool, scope: Option<Scope<'a>>) -> CompilerState<'a> {
         CompilerState {
-            is_global: true,
+            is_global,
             loop_state: None,
             function_state: None,
             scope,
@@ -113,7 +121,7 @@ impl Compiler {
     where
         T: Iterator<Item = &'a Statement>,
     {
-        let mut state = CompilerState::new(None);
+        let mut state = CompilerState::new(true, None);
 
         for statement in statements {
             self.compile_statement(&mut state, statement)?;
