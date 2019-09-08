@@ -135,7 +135,7 @@ impl Compiler {
             StatementKind::While { .. } => self.compile_while_statement(state, statement)?,
             StatementKind::Break => self.compile_break_statement(state, statement)?,
             StatementKind::Continue => self.compile_continue_statement(state, statement)?,
-            // StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
+            StatementKind::Expression(_) => self.compile_expression_statement(state, statement)?,
             _ => unimplemented!(),
         };
 
@@ -460,6 +460,21 @@ impl Compiler {
         }
     }
 
+    fn compile_expression_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::Expression(expr) = &statement.value {
+            self.compile_expression(state, expr)?;
+            self.bytecode.pop();
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
     fn compile_expression(
         &mut self,
         _state: &mut CompilerState,
@@ -730,6 +745,17 @@ mod tests {
                 pop
                 jump start
             end:
+            },
+        )
+    }
+
+    #[test]
+    fn test_expression_statement() -> Result<(), String> {
+        test_statement!(
+            "null;",
+            bc! {
+                const_null
+                pop
             },
         )
     }
