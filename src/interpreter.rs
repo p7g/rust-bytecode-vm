@@ -560,6 +560,41 @@ impl<'a> Interpreter<'a> {
 
                     push!(Value::from(left == right));
                 }
+
+                OpCode::NotEqual => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left != right));
+                }
+
+                OpCode::LessThan => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left < right));
+                }
+
+                OpCode::LessThanEqual => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left <= right));
+                }
+
+                OpCode::GreaterThan => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left > right));
+                }
+
+                OpCode::GreaterThanEqual => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    push!(Value::from(left >= right));
+                }
             }
         }
 

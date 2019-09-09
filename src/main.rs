@@ -79,17 +79,42 @@ fn main() -> Result<(), String> {
     let code = {
         let lexer = parser::Lexer::new(
             r#"
-function factorial(n) {
+function fib_slow(n) {
+    if n == 0 {
+        return 1;
+    }
     if n == 1 {
         return 1;
     }
-    if n == 2 {
-        return 2;
-    }
-    return n * factorial(n - 1);
+    return fib_slow(n - 1) + fib_slow(n - 2);
 }
 
-print(factorial(10));
+function fib_fast(n) {
+    let a = 1;
+    let b = 1;
+
+    for let cursor = 0; cursor <= n; cursor = cursor + 1 {
+        if cursor == 0 {
+            continue;
+        }
+        if cursor == 1 {
+            continue;
+        }
+
+        if cursor % 2 == 0 {
+            b = a + b;
+        } else {
+            a = a + b;
+        }
+    }
+
+    if a > b {
+        return a;
+    }
+    return b;
+}
+
+print(fib_slow(25));
 "#,
         );
         let parser = parser::Parser::new(&mut agent, lexer);

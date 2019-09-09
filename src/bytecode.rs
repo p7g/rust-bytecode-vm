@@ -257,6 +257,26 @@ impl Bytecode {
         self.op(OpCode::Equal)
     }
 
+    pub fn not_equal(&mut self) -> &mut Bytecode {
+        self.op(OpCode::NotEqual)
+    }
+
+    pub fn less_than(&mut self) -> &mut Bytecode {
+        self.op(OpCode::LessThan)
+    }
+
+    pub fn less_than_equal(&mut self) -> &mut Bytecode {
+        self.op(OpCode::LessThanEqual)
+    }
+
+    pub fn greater_than(&mut self) -> &mut Bytecode {
+        self.op(OpCode::GreaterThan)
+    }
+
+    pub fn greater_than_equal(&mut self) -> &mut Bytecode {
+        self.op(OpCode::GreaterThanEqual)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,

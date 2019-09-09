@@ -39,6 +39,11 @@ pub enum OpCode {
     ArrayGet,
     ArraySet,
     Equal,
+    NotEqual,
+    LessThan,
+    LessThanEqual,
+    GreaterThan,
+    GreaterThanEqual,
 }
 
 impl Into<u8> for OpCode {
@@ -89,6 +94,11 @@ impl std::convert::TryFrom<u8> for OpCode {
             34 => OpCode::ArrayGet,
             35 => OpCode::ArraySet,
             36 => OpCode::Equal,
+            37 => OpCode::NotEqual,
+            38 => OpCode::LessThan,
+            39 => OpCode::LessThanEqual,
+            40 => OpCode::GreaterThan,
+            41 => OpCode::GreaterThanEqual,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

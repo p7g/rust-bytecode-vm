@@ -93,7 +93,12 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::Pop
             | OpCode::ArrayGet
             | OpCode::ArraySet
-            | OpCode::Equal => println!("{:?}", instruction),
+            | OpCode::Equal
+            | OpCode::NotEqual
+            | OpCode::LessThan
+            | OpCode::LessThanEqual
+            | OpCode::GreaterThan
+            | OpCode::GreaterThanEqual => println!("{:?}", instruction),
         }
     }
 

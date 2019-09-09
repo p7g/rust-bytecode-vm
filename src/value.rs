@@ -1,5 +1,6 @@
 use crate::interpreter::Interpreter;
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::rc::Rc;
 
 type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Value;
@@ -271,6 +272,22 @@ impl PartialEq for Value {
                     false
                 }
             }
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self == other {
+            return Some(Ordering::Equal);
+        }
+
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Some(a.cmp(b)),
+            (Value::Double(a), Value::Integer(b)) => a.partial_cmp(&(*b as f64)),
+            (Value::Integer(a), Value::Double(b)) => Some(a.cmp(&(*b as i64))),
+            (Value::Double(a), Value::Double(b)) => a.partial_cmp(b),
+            _ => None
         }
     }
 }

@@ -767,15 +767,33 @@ impl Compiler {
                     }
                 }
                 TokenType::EqualEqual
+                | TokenType::BangEqual
                 | TokenType::Star
-                | TokenType::Minus => {
+                | TokenType::Minus
+                | TokenType::Plus
+                | TokenType::StarStar
+                | TokenType::Percent
+                | TokenType::Slash
+                | TokenType::LessThan
+                | TokenType::LessThanEqual
+                | TokenType::GreaterThan
+                | TokenType::GreaterThanEqual => {
                     self.compile_expression(state, left)?;
                     self.compile_expression(state, right)?;
                     match op {
                         TokenType::EqualEqual => self.bytecode.equal(),
+                        TokenType::BangEqual => self.bytecode.not_equal(),
                         TokenType::Star => self.bytecode.mul(),
                         TokenType::Minus => self.bytecode.sub(),
-                        _ => unimplemented!(),
+                        TokenType::Plus => self.bytecode.add(),
+                        TokenType::StarStar => self.bytecode.exp(),
+                        TokenType::Percent => self.bytecode.rem(),
+                        TokenType::Slash => self.bytecode.div(),
+                        TokenType::LessThan => self.bytecode.less_than(),
+                        TokenType::LessThanEqual => self.bytecode.less_than_equal(),
+                        TokenType::GreaterThan => self.bytecode.greater_than(),
+                        TokenType::GreaterThanEqual => self.bytecode.greater_than_equal(),
+                        _ => unreachable!(),
                     };
                 }
                 _ => unimplemented!(),
