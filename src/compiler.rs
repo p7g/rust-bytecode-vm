@@ -550,7 +550,7 @@ impl Compiler {
                 self.compile_binary_operation_expression(state, expression)
             }
             ExpressionKind::Call(..) => self.compile_call_expression(state, expression),
-            // ExpressionKind::Index(..) => self.compile_index_expression(state, expression),
+            ExpressionKind::Index(..) => self.compile_index_expression(state, expression),
             _ => unimplemented!(),
         }
     }
@@ -711,10 +711,10 @@ impl Compiler {
             match op {
                 TokenType::Equal => {
                     self.compile_expression(state, right)?;
-                    match left.as_ref().value {
+                    match &left.as_ref().value {
                         ExpressionKind::Identifier(id) => {
                             if let Some(scope) = &state.scope {
-                                if let Some(binding) = scope.get_binding(id) {
+                                if let Some(binding) = scope.get_binding(*id) {
                                     match binding.typ {
                                         BindingType::Argument => {
                                             self.bytecode.store_argument(binding.index)
@@ -726,14 +726,14 @@ impl Compiler {
                                             self.bytecode.store_upvalue(binding.index)
                                         }
                                     };
-                                } else if scope.parent_has_binding(id) {
+                                } else if scope.parent_has_binding(*id) {
                                     if let Some(idx) = state
                                         .function_state
                                         .as_ref()
                                         .unwrap()
                                         .free_variables
                                         .iter()
-                                        .position(|v| *v == id)
+                                        .position(|v| *v == *id)
                                     {
                                         self.bytecode.store_upvalue(
                                             scope.binding_count[BindingType::Upvalue as usize]
@@ -754,15 +754,22 @@ impl Compiler {
                                             .as_mut()
                                             .unwrap()
                                             .free_variables
-                                            .push(id);
+                                            .push(*id);
                                     }
                                 } else {
-                                    self.bytecode.store_global(id);
+                                    self.bytecode.store_global(*id);
                                 }
                             } else {
-                                self.bytecode.store_global(id);
+                                self.bytecode.store_global(*id);
                             }
                         }
+
+                        ExpressionKind::Index(arr, index) => {
+                            self.compile_expression(state, &arr)?;
+                            self.compile_expression(state, &index)?;
+                            self.bytecode.array_set();
+                        }
+
                         _ => unimplemented!(),
                     }
                 }
@@ -804,6 +811,23 @@ impl Compiler {
             unreachable!();
         }
     }
+
+    fn compile_index_expression(
+        &mut self,
+        state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Index(left, right) = &expression.value {
+            self.compile_expression(state, left)?;
+            self.compile_expression(state, right)?;
+            self.bytecode.array_get();
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
 }
 
 #[cfg(test)]
