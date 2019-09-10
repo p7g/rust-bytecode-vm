@@ -302,7 +302,7 @@ impl<'a> Interpreter<'a> {
                             }
                         }
                     } else {
-                        return Err(format!("Value {:?} is not callable", function));
+                        return Err(format!("Value {} is not callable", function));
                     }
                 }
 

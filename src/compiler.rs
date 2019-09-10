@@ -187,8 +187,8 @@ impl Compiler {
         &mut self,
         state: &mut CompilerState,
         name: Option<usize>,
-        parameters: &Vec<Expression>,
-        body: &Vec<Statement>,
+        parameters: &[Expression],
+        body: &[Statement],
     ) -> CompileResult<()> {
         let start_label = self.bytecode.new_label();
         let end_label = self.bytecode.new_label();
@@ -827,7 +827,6 @@ impl Compiler {
             unreachable!();
         }
     }
-
 }
 
 #[cfg(test)]

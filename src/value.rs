@@ -287,7 +287,7 @@ impl PartialOrd for Value {
             (Value::Double(a), Value::Integer(b)) => a.partial_cmp(&(*b as f64)),
             (Value::Integer(a), Value::Double(b)) => Some(a.cmp(&(*b as i64))),
             (Value::Double(a), Value::Double(b)) => a.partial_cmp(b),
-            _ => None
+            _ => None,
         }
     }
 }
