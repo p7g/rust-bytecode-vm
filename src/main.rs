@@ -45,6 +45,14 @@ fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
     Value::Null
 }
 
+fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::Integer(n)) = args.get(0) {
+        Value::from(vec![Value::Null; *n as usize])
+    } else {
+        panic!("Expected int");
+    }
+}
+
 fn main() -> Result<(), String> {
     let mut agent = Agent::new();
     let mut global = HashMap::new();
@@ -76,17 +84,35 @@ fn main() -> Result<(), String> {
         }),
     );
 
+    global.insert(
+        agent.intern_string("array_new"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("array_new")),
+            arity: 1,
+            function: array_new,
+        }),
+    );
+
     let code = {
         let lexer = parser::Lexer::new(
             r#"
 function fib_slow(n) {
-    if n == 0 {
-        return 1;
+    let seen = array_new(n + 1);
+    seen[0] = 1;
+    seen[1] = 1;
+
+    function do_fib(n) {
+        if seen[n] != null {
+            return seen[n];
+        }
+        let less1 = do_fib(n - 1);
+        let less2 = do_fib(n - 2);
+        seen[n - 1] = less1;
+        seen[n - 2] = less2;
+        return less1 + less2;
     }
-    if n == 1 {
-        return 1;
-    }
-    return fib_slow(n - 1) + fib_slow(n - 2);
+
+    return do_fib(n);
 }
 
 function fib_fast(n) {
@@ -114,7 +140,7 @@ function fib_fast(n) {
     return b;
 }
 
-print(fib_slow(25));
+print(fib_slow(46));
 "#,
         );
         let parser = parser::Parser::new(&mut agent, lexer);
