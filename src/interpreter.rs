@@ -85,7 +85,7 @@ impl<'a> Interpreter<'a> {
 
                 for i in 0..$expr {
                     let result: Result<&u8, String> =
-                        next!().ok_or("Unexpected end of bytecode".into());
+                        next!().ok_or_else(|| "Unexpected end of bytecode".to_string());
                     let n: u8 = *result?;
                     array[i] = n;
                 }
