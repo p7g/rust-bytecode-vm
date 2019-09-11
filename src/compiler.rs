@@ -1270,4 +1270,29 @@ mod tests {
             .pop();
         test_statement!("[1, 2, 3];", bc)
     }
+
+    #[test]
+    fn test_function_expression() -> Result<(), String> {
+        unimplemented!();
+    }
+
+    #[test]
+    fn test_binary_operation_expression() -> Result<(), String> {
+        unimplemented!();
+    }
+
+    #[test]
+    fn test_call_expression() -> Result<(), String> {
+        unimplemented!();
+    }
+
+    #[test]
+    fn test_index_expression() -> Result<(), String> {
+        unimplemented!();
+    }
+
+    #[test]
+    fn test_unary_operation_expression() -> Result<(), String> {
+        unimplemented!();
+    }
 }
