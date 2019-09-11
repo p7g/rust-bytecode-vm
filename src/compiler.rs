@@ -40,6 +40,7 @@ enum BindingType {
     Local,
 }
 
+#[derive(Clone)]
 struct Binding {
     typ: BindingType,
     name: usize,
@@ -102,6 +103,39 @@ impl<'a> CompilerState<'a> {
             loop_state: None,
             function_state: None,
             scope,
+        }
+    }
+
+    pub fn resolve_binding(&mut self, id: usize) -> Option<Binding> {
+        if let Some(scope) = &mut self.scope {
+            if let Some(binding) = scope.get_binding(id) {
+                Some((*binding).clone())
+            } else if scope.parent_has_binding(id) {
+                if let Some(function_state) = &mut self.function_state {
+                    if let Some(idx) = function_state.free_variables.iter().position(|v| *v == id) {
+                        Some(Binding {
+                            typ: BindingType::Upvalue,
+                            index: scope.binding_count[BindingType::Upvalue as usize] + idx,
+                            name: id,
+                        })
+                    } else {
+                        let idx = scope.binding_count[BindingType::Upvalue as usize]
+                            + function_state.free_variables.len();
+                        function_state.free_variables.push(id);
+                        Some(Binding {
+                            typ: BindingType::Upvalue,
+                            index: idx,
+                            name: id,
+                        })
+                    }
+                } else {
+                    unreachable!();
+                }
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 }
@@ -561,30 +595,22 @@ impl Compiler {
         expression: &Expression,
     ) -> CompileResult<()> {
         if let ExpressionKind::Identifier(id) = expression.value {
-            if let Some(scope) = &state.scope {
-                if let Some(binding) = scope.get_binding(id) {
-                    match binding.typ {
-                        BindingType::Argument => self.bytecode.load_argument(binding.index),
-                        BindingType::Local => self.bytecode.load_local(binding.index),
-                        BindingType::Upvalue => {
-                            if state.function_state.is_some() {
-                                self.bytecode.load_upvalue(binding.index)
-                            } else {
-                                return Err(
-                                    "Attempting to load upvalue when not in function".to_string()
-                                );
-                            }
+            if let Some(binding) = state.resolve_binding(id) {
+                match binding.typ {
+                    BindingType::Argument => {
+                        self.bytecode.load_argument(binding.index);
+                    }
+                    BindingType::Local => {
+                        self.bytecode.load_local(binding.index);
+                    }
+                    BindingType::Upvalue => {
+                        if state.function_state.is_some() {
+                            self.bytecode.load_upvalue(binding.index);
+                        } else {
+                            return Err(
+                                "Attempting to load upvalue when not in function".to_string()
+                            );
                         }
-                    };
-                } else if let Some(function_state) = &mut state.function_state {
-                    if scope.parent_has_binding(id) {
-                        self.bytecode.load_upvalue(
-                            scope.binding_count[BindingType::Upvalue as usize]
-                                + function_state.free_variables.len(),
-                        );
-                        function_state.free_variables.push(id);
-                    } else {
-                        self.bytecode.load_global(id);
                     }
                 }
             } else {
@@ -713,52 +739,16 @@ impl Compiler {
                     self.compile_expression(state, right)?;
                     match &left.as_ref().value {
                         ExpressionKind::Identifier(id) => {
-                            if let Some(scope) = &state.scope {
-                                if let Some(binding) = scope.get_binding(*id) {
-                                    match binding.typ {
-                                        BindingType::Argument => {
-                                            self.bytecode.store_argument(binding.index)
-                                        }
-                                        BindingType::Local => {
-                                            self.bytecode.store_local(binding.index)
-                                        }
-                                        BindingType::Upvalue => {
-                                            self.bytecode.store_upvalue(binding.index)
-                                        }
-                                    };
-                                } else if scope.parent_has_binding(*id) {
-                                    if let Some(idx) = state
-                                        .function_state
-                                        .as_ref()
-                                        .unwrap()
-                                        .free_variables
-                                        .iter()
-                                        .position(|v| *v == *id)
-                                    {
-                                        self.bytecode.store_upvalue(
-                                            scope.binding_count[BindingType::Upvalue as usize]
-                                                + idx,
-                                        );
-                                    } else {
-                                        self.bytecode.store_upvalue(
-                                            scope.binding_count[BindingType::Upvalue as usize]
-                                                + state
-                                                    .function_state
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .free_variables
-                                                    .len(),
-                                        );
-                                        state
-                                            .function_state
-                                            .as_mut()
-                                            .unwrap()
-                                            .free_variables
-                                            .push(*id);
+                            if let Some(binding) = state.resolve_binding(*id) {
+                                match binding.typ {
+                                    BindingType::Argument => {
+                                        self.bytecode.store_argument(binding.index)
                                     }
-                                } else {
-                                    self.bytecode.store_global(*id);
-                                }
+                                    BindingType::Local => self.bytecode.store_local(binding.index),
+                                    BindingType::Upvalue => {
+                                        self.bytecode.store_upvalue(binding.index)
+                                    }
+                                };
                             } else {
                                 self.bytecode.store_global(*id);
                             }
