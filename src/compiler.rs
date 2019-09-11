@@ -1273,22 +1273,54 @@ mod tests {
 
     #[test]
     fn test_function_expression() -> Result<(), String> {
-        unimplemented!();
+        let mut bc = Bytecode::new();
+        bc.op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("func")
+            .const_null()
+            .ret()
+            .label("end")
+            .pop();
+        test_statement!("(function() {});", bc)
     }
 
     #[test]
     fn test_binary_operation_expression() -> Result<(), String> {
-        unimplemented!();
+        let mut bc = Bytecode::new();
+        bc.const_int(1).const_int(2).const_int(3).mul().add().pop();
+        test_statement!("1 + 2 * 3;", bc)
+    }
+
+    #[test]
+    fn test_assignment_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let a = agent.intern_string("a");
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .declare_global(a)
+            .store_global(a)
+            .pop()
+            .const_int(1)
+            .store_global(a)
+            .pop();
+        test_statement!("let a; a = 1;", bc)
     }
 
     #[test]
     fn test_call_expression() -> Result<(), String> {
-        unimplemented!();
+        let mut bc = Bytecode::new();
+        bc.const_int(1).const_null().call(1).pop();
+        test_statement!("null(1);", bc)
     }
 
     #[test]
     fn test_index_expression() -> Result<(), String> {
-        unimplemented!();
+        let mut bc = Bytecode::new();
+        bc.new_array_with_values(0).const_int(0).array_get().pop();
+        test_statement!("[][0];", bc)
     }
 
     #[test]
