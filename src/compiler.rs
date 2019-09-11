@@ -580,13 +580,14 @@ impl Compiler {
             ExpressionKind::Boolean(_) => self.compile_boolean_expression(state, expression),
             ExpressionKind::Array(_) => self.compile_array_expression(state, expression),
             ExpressionKind::Function { .. } => self.compile_function_expression(state, expression),
-            // ExpressionKind::UnaryOperation(..) => self.compile_unary_operation_expression(state, expression),
+            ExpressionKind::UnaryOperation(..) => {
+                self.compile_unary_operation_expression(state, expression)
+            }
             ExpressionKind::BinaryOperation(..) => {
                 self.compile_binary_operation_expression(state, expression)
             }
             ExpressionKind::Call(..) => self.compile_call_expression(state, expression),
             ExpressionKind::Index(..) => self.compile_index_expression(state, expression),
-            _ => unimplemented!(),
         }
     }
 
@@ -819,6 +820,14 @@ impl Compiler {
         } else {
             unreachable!();
         }
+    }
+
+    fn compile_unary_operation_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        _expression: &Expression,
+    ) -> CompileResult<()> {
+        unimplemented!();
     }
 
     fn compile_index_expression(
