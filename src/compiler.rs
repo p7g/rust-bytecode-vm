@@ -577,6 +577,7 @@ impl Compiler {
             ExpressionKind::Double(_) => self.compile_double_expression(state, expression),
             ExpressionKind::String(_) => self.compile_string_expression(state, expression),
             ExpressionKind::Null => self.compile_null_expression(state, expression),
+            ExpressionKind::Boolean(_) => self.compile_boolean_expression(state, expression),
             ExpressionKind::Array(_) => self.compile_array_expression(state, expression),
             ExpressionKind::Function { .. } => self.compile_function_expression(state, expression),
             // ExpressionKind::UnaryOperation(..) => self.compile_unary_operation_expression(state, expression),
@@ -658,6 +659,24 @@ impl Compiler {
     ) -> CompileResult<()> {
         if let ExpressionKind::String(s) = expression.value {
             self.bytecode.const_string(s);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_boolean_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Boolean(b) = expression.value {
+            if b {
+                self.bytecode.const_true();
+            } else {
+                self.bytecode.const_false();
+            }
 
             Ok(())
         } else {
