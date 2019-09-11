@@ -1125,4 +1125,138 @@ mod tests {
             },
         )
     }
+
+    #[test]
+    fn test_identifier_expression_local() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("test")
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("test")
+            .const_null()
+            .load_local(0)
+            .ret()
+            .label("end");
+        test_statement!("function test() { let b; return b; }", bc)
+    }
+
+    #[test]
+    fn test_identifier_expression_global() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .load_global(ident_test)
+            .pop();
+        test_statement!("let test; test;", bc)
+    }
+
+    #[test]
+    fn test_identifier_expression_argument() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.op(OpCode::NewFunction)
+            .usize(1)
+            .address_of("test")
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("test")
+            .load_argument(0)
+            .ret()
+            .label("end");
+        test_statement!("function test(a) { return a; }", bc)
+    }
+
+    #[test]
+    fn test_identifier_expression_upvalue() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("test")
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("test")
+            .const_null()
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("inner")
+            .op(OpCode::Jump)
+            .address_of("inner_end")
+            .label("inner")
+            .load_upvalue(0)
+            .ret()
+            .label("inner_end")
+            .bind_local(0)
+            .ret()
+            .label("end");
+        test_statement!(
+            "
+            function test() {
+                let a;
+                return function() { return a; };
+            }
+        ",
+            bc
+        )
+    }
+
+    #[test]
+    fn test_integer_expression() -> Result<(), String> {
+        let mut bc = Bytecode::new();
+        bc.const_int(123).pop();
+        test_statement!("123;", bc)
+    }
+
+    #[test]
+    fn test_double_expression() -> Result<(), String> {
+        let mut bc = Bytecode::new();
+        bc.const_double(1.23).pop();
+        test_statement!("1.23;", bc)
+    }
+
+    #[test]
+    fn test_string_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let s = agent.intern_string("hello");
+        let mut bc = Bytecode::new();
+        bc.const_string(s).pop();
+        test_statement!("\"hello\";", bc)
+    }
+
+    #[test]
+    fn test_null_expression() -> Result<(), String> {
+        let mut bc = Bytecode::new();
+        bc.const_null().pop();
+        test_statement!("null;", bc)
+    }
+
+    #[test]
+    fn test_boolean_expression() -> Result<(), String> {
+        let mut bc = Bytecode::new();
+        bc.const_true().pop().const_false().pop();
+        test_statement!("true; false;", bc)
+    }
 }
