@@ -1259,4 +1259,15 @@ mod tests {
         bc.const_true().pop().const_false().pop();
         test_statement!("true; false;", bc)
     }
+
+    #[test]
+    fn test_array_expression() -> Result<(), String> {
+        let mut bc = Bytecode::new();
+        bc.const_int(1)
+            .const_int(2)
+            .const_int(3)
+            .new_array_with_values(3)
+            .pop();
+        test_statement!("[1, 2, 3];", bc)
+    }
 }
