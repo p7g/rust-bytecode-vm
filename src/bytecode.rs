@@ -277,6 +277,26 @@ impl Bytecode {
         self.op(OpCode::GreaterThanEqual)
     }
 
+    pub fn bitwise_and(&mut self) -> &mut Bytecode {
+        self.op(OpCode::BitwiseAnd)
+    }
+
+    pub fn bitwise_or(&mut self) -> &mut Bytecode {
+        self.op(OpCode::BitwiseOr)
+    }
+
+    pub fn bitwise_xor(&mut self) -> &mut Bytecode {
+        self.op(OpCode::BitwiseXor)
+    }
+
+    pub fn bitwise_not(&mut self) -> &mut Bytecode {
+        self.op(OpCode::BitwiseNot)
+    }
+
+    pub fn not(&mut self) -> &mut Bytecode {
+        self.op(OpCode::Not)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,

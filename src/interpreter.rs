@@ -595,6 +595,67 @@ impl<'a> Interpreter<'a> {
 
                     push!(Value::from(left >= right));
                 }
+
+                OpCode::BitwiseAnd => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    if let Value::Integer(left) = left {
+                        if let Value::Integer(right) = right {
+                            push!(Value::from(left & right));
+                        } else {
+                            return Err("Bitwise operations only support integers".to_string());
+                        }
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
+
+                OpCode::BitwiseOr => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    if let Value::Integer(left) = left {
+                        if let Value::Integer(right) = right {
+                            push!(Value::from(left | right));
+                        } else {
+                            return Err("Bitwise operations only support integers".to_string());
+                        }
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
+
+                OpCode::BitwiseXor => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    if let Value::Integer(left) = left {
+                        if let Value::Integer(right) = right {
+                            push!(Value::from(left ^ right));
+                        } else {
+                            return Err("Bitwise operations only support integers".to_string());
+                        }
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
+
+                OpCode::BitwiseNot => {
+                    let right = pop!();
+
+                    if let Value::Integer(right) = right {
+                        push!(Value::from(!right));
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
+
+                OpCode::Not => {
+                    let right = pop!();
+
+                    push!(Value::from(!right.is_truthy()));
+                }
             }
         }
 

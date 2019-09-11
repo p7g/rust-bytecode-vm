@@ -794,7 +794,10 @@ impl Compiler {
                 | TokenType::LessThan
                 | TokenType::LessThanEqual
                 | TokenType::GreaterThan
-                | TokenType::GreaterThanEqual => {
+                | TokenType::GreaterThanEqual
+                | TokenType::And
+                | TokenType::Pipe
+                | TokenType::Caret => {
                     self.compile_expression(state, left)?;
                     self.compile_expression(state, right)?;
                     match op {
@@ -810,10 +813,13 @@ impl Compiler {
                         TokenType::LessThanEqual => self.bytecode.less_than_equal(),
                         TokenType::GreaterThan => self.bytecode.greater_than(),
                         TokenType::GreaterThanEqual => self.bytecode.greater_than_equal(),
+                        TokenType::And => self.bytecode.bitwise_and(),
+                        TokenType::Pipe => self.bytecode.bitwise_or(),
+                        TokenType::Caret => self.bytecode.bitwise_xor(),
                         _ => unreachable!(),
                     };
                 }
-                _ => unimplemented!(),
+                _ => unreachable!(),
             }
 
             Ok(())

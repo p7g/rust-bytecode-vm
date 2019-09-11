@@ -44,6 +44,11 @@ pub enum OpCode {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseNot,
+    Not,
 }
 
 impl Into<u8> for OpCode {
@@ -99,6 +104,11 @@ impl std::convert::TryFrom<u8> for OpCode {
             39 => OpCode::LessThanEqual,
             40 => OpCode::GreaterThan,
             41 => OpCode::GreaterThanEqual,
+            42 => OpCode::BitwiseAnd,
+            43 => OpCode::BitwiseOr,
+            44 => OpCode::BitwiseXor,
+            45 => OpCode::BitwiseNot,
+            46 => OpCode::Not,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

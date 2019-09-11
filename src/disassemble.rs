@@ -98,7 +98,12 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::LessThan
             | OpCode::LessThanEqual
             | OpCode::GreaterThan
-            | OpCode::GreaterThanEqual => println!("{:?}", instruction),
+            | OpCode::GreaterThanEqual
+            | OpCode::BitwiseAnd
+            | OpCode::BitwiseOr
+            | OpCode::BitwiseXor
+            | OpCode::BitwiseNot
+            | OpCode::Not => println!("{:?}", instruction),
         }
     }
 
