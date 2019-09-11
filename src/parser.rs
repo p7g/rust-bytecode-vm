@@ -47,6 +47,8 @@ pub enum TokenType {
     Break,
     Continue,
     Let,
+    True,
+    False,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -286,6 +288,8 @@ impl<'a> Lexer<'a> {
                         "break" => token!(TokenType::Break),
                         "continue" => token!(TokenType::Continue),
                         "null" => token!(TokenType::Null),
+                        "true" => token!(TokenType::True),
+                        "false" => token!(TokenType::False),
                         _ => token!(TokenType::Identifier),
                     }
                 }
@@ -393,6 +397,7 @@ pub enum ExpressionKind {
     Integer(i64),
     Double(f64),
     String(usize),
+    Boolean(bool),
     Null,
     Array(Vec<Expression>),
     Function {
@@ -714,6 +719,7 @@ impl<'a> Parser<'a> {
             TokenType::Integer => self.parse_integer_expression(token),
             TokenType::Double => self.parse_double_expression(token),
             TokenType::String => self.parse_string_expression(token),
+            TokenType::True | TokenType::False => self.parse_boolean_expression(token),
             TokenType::Null => self.parse_null_expression(token),
             TokenType::LeftParen => self.parse_parenthesized_expression(token),
             TokenType::LeftBracket => self.parse_array_expression(token),
@@ -819,6 +825,17 @@ impl<'a> Parser<'a> {
         Ok(Expression {
             position: null.position,
             value: ExpressionKind::Null,
+        })
+    }
+
+    fn parse_boolean_expression(&mut self, b: Token) -> ParseResult<Expression> {
+        Ok(Expression {
+            position: b.position,
+            value: ExpressionKind::Boolean(match b.typ {
+                TokenType::True => true,
+                TokenType::False => false,
+                _ => unreachable!(),
+            }),
         })
     }
 
@@ -2180,5 +2197,15 @@ return 1;
                 body: Vec::new(),
             },
         );
+    }
+
+    #[test]
+    fn test_boolean_expression_true() {
+        test_expression!("true;", ExpressionKind::Boolean(true),);
+    }
+
+    #[test]
+    fn test_boolean_expression_false() {
+        test_expression!("false;", ExpressionKind::Boolean(false),);
     }
 }
