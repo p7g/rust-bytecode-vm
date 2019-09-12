@@ -33,8 +33,10 @@ pub enum TokenType {
     Bang,
     BangEqual,
     LessThan,
+    LessLess,
     LessThanEqual,
     GreaterThan,
+    GreaterGreater,
     GreaterThanEqual,
     Comma,
 
@@ -99,14 +101,16 @@ impl Token {
             TokenType::LessThanEqual => 5,
             TokenType::GreaterThan => 5,
             TokenType::GreaterThanEqual => 5,
-            TokenType::Plus => 6,
-            TokenType::Minus => 6,
-            TokenType::Star => 7,
-            TokenType::Slash => 8,
-            TokenType::Percent => 9,
-            TokenType::StarStar => 10,
-            TokenType::LeftParen => 12,
-            TokenType::LeftBracket => 12,
+            TokenType::LessLess => 6,
+            TokenType::GreaterGreater => 6,
+            TokenType::Plus => 7,
+            TokenType::Minus => 7,
+            TokenType::Star => 8,
+            TokenType::Slash => 9,
+            TokenType::Percent => 10,
+            TokenType::StarStar => 11,
+            TokenType::LeftParen => 13,
+            TokenType::LeftBracket => 13,
 
             TokenType::Semicolon => 0,
             TokenType::RightParen => 0,
@@ -745,7 +749,9 @@ impl<'a> Parser<'a> {
             | TokenType::GreaterThan
             | TokenType::GreaterThanEqual
             | TokenType::EqualEqual
-            | TokenType::BangEqual => self.parse_left_assoc_binary(token, left),
+            | TokenType::BangEqual
+            | TokenType::LessLess
+            | TokenType::GreaterGreater => self.parse_left_assoc_binary(token, left),
             TokenType::Equal | TokenType::StarStar => self.parse_right_assoc_binary(token, left),
             TokenType::LeftParen => self.parse_call_expression(token, left),
             TokenType::LeftBracket => self.parse_index_expression(token, left),

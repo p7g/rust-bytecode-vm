@@ -297,6 +297,14 @@ impl Bytecode {
         self.op(OpCode::Not)
     }
 
+    pub fn shift_left(&mut self) -> &mut Bytecode {
+        self.op(OpCode::LeftShift)
+    }
+
+    pub fn shift_right(&mut self) -> &mut Bytecode {
+        self.op(OpCode::RightShift)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -633,6 +641,18 @@ macro_rules! bytecode {
     (($builder:expr) not $($tt:tt)*) => {{
         bytecode! {
             ($builder.not())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) shift_left $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.shift_left())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) shift_right $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.shift_right())
             $($tt)*
         }
     }};

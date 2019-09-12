@@ -656,6 +656,36 @@ impl<'a> Interpreter<'a> {
 
                     push!(Value::from(!right.is_truthy()));
                 }
+
+                OpCode::LeftShift => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    if let Value::Integer(left) = left {
+                        if let Value::Integer(right) = right {
+                            push!(Value::from(left.wrapping_shl(right as u32)));
+                        } else {
+                            return Err("Bitwise operations only support integers".to_string());
+                        }
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
+
+                OpCode::RightShift => {
+                    let right = pop!();
+                    let left = pop!();
+
+                    if let Value::Integer(left) = left {
+                        if let Value::Integer(right) = right {
+                            push!(Value::from(left.wrapping_shr(right as u32)));
+                        } else {
+                            return Err("Bitwise operations only support integers".to_string());
+                        }
+                    } else {
+                        return Err("Bitwise operations only support integers".to_string());
+                    }
+                }
             }
         }
 
@@ -1739,5 +1769,41 @@ mod tests {
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(false)));
+    }
+
+    #[test]
+    fn test_shift_left() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 2
+            const_int 3
+            shift_left
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(16)));
+    }
+
+    #[test]
+    fn test_shift_right() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 16
+            const_int 3
+            shift_right
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(2)));
     }
 }

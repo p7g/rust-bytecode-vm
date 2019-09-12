@@ -103,7 +103,9 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::BitwiseOr
             | OpCode::BitwiseXor
             | OpCode::BitwiseNot
-            | OpCode::Not => println!("{:?}", instruction),
+            | OpCode::Not
+            | OpCode::LeftShift
+            | OpCode::RightShift => println!("{:?}", instruction),
         }
     }
 
