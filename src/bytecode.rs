@@ -576,6 +576,66 @@ macro_rules! bytecode {
             $($tt)*
         }
     }};
+    (($builder:expr) not_equal $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.not_equal())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) less_than $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.less_than())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) less_than_equal $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.less_than_equal())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) greater_than $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.greater_than())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) greater_than_equal $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.greater_than_equal())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bitwise_and $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bitwise_and())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bitwise_or $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bitwise_or())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bitwise_xor $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bitwise_xor())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) bitwise_not $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.bitwise_not())
+            $($tt)*
+        }
+    }};
+    (($builder:expr) not $($tt:tt)*) => {{
+        bytecode! {
+            ($builder.not())
+            $($tt)*
+        }
+    }};
     (($builder:expr) $label:ident : $($tt:tt)*) => {{
         bytecode! {
             ($builder.label(stringify!($label)))
