@@ -218,14 +218,14 @@ impl<'a> Interpreter<'a> {
                     push!(Value::from(self.agent.string_table[idx].as_ref()));
                 }
 
-                OpCode::Add => number_binop!("addition", i64::add, f64::add),
-                OpCode::Sub => number_binop!("subtraction", i64::sub, f64::sub),
-                OpCode::Mul => number_binop!("multiplication", i64::mul, f64::mul),
-                OpCode::Div => number_binop!("division", i64::div, f64::div),
-                OpCode::Mod => number_binop!("modulus", i64::rem, f64::rem),
+                OpCode::Add => number_binop!("addition", i64::wrapping_add, f64::add),
+                OpCode::Sub => number_binop!("subtraction", i64::wrapping_sub, f64::sub),
+                OpCode::Mul => number_binop!("multiplication", i64::wrapping_mul, f64::mul),
+                OpCode::Div => number_binop!("division", i64::wrapping_div, f64::div),
+                OpCode::Mod => number_binop!("modulus", i64::wrapping_rem, f64::rem),
                 OpCode::Exp => number_binop!(
                     "exponentiation",
-                    i64::pow,
+                    i64::wrapping_pow,
                     f64::powf,
                     |b: i64| -> Result<u32, String> {
                         b.try_into().map_err(|_| "Integer overflow".to_string())
