@@ -1420,4 +1420,324 @@ mod tests {
             Ok(Value::from(vec![Value::Null, Value::from(9229)]))
         );
     }
+
+    #[test]
+    fn test_equal() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9229
+            equal
+            const_int 9229
+            const_int 9230
+            equal
+            new_array_with_values 2
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![Value::from(false), Value::from(true)]))
+        );
+    }
+
+    #[test]
+    fn test_not_equal() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9228
+            not_equal
+            const_int 9229
+            const_int 9229
+            not_equal
+            new_array_with_values 2
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![Value::from(false), Value::from(true)]))
+        );
+    }
+
+    #[test]
+    fn test_less_than() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9228
+            less_than
+            const_int 9229
+            const_int 9229
+            less_than
+            const_int 9229
+            const_int 9230
+            less_than
+            new_array_with_values 3
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(true),
+                Value::from(false),
+                Value::from(false)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_less_than_equal() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9229
+            less_than_equal
+            const_int 9228
+            const_int 9229
+            less_than_equal
+            const_int 9230
+            const_int 9229
+            less_than_equal
+            new_array_with_values 3
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(false),
+                Value::from(true),
+                Value::from(true)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_greater_than() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9229
+            greater_than
+            const_int 9229
+            const_int 9228
+            greater_than
+            const_int 9230
+            const_int 9229
+            greater_than
+            new_array_with_values 3
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(true),
+                Value::from(true),
+                Value::from(false)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_greater_than_equal() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 9229
+            const_int 9229
+            greater_than_equal
+            const_int 9228
+            const_int 9229
+            greater_than_equal
+            const_int 9230
+            const_int 9229
+            greater_than_equal
+            new_array_with_values 3
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(true),
+                Value::from(false),
+                Value::from(true)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_bitwise_and() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 6
+            const_int 1
+            bitwise_and
+            const_int 6
+            const_int 2
+            bitwise_and
+            const_int 1
+            const_int 6
+            bitwise_and
+            const_int 2
+            const_int 6
+            bitwise_and
+            new_array_with_values 4
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(2),
+                Value::from(0),
+                Value::from(2),
+                Value::from(0)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_bitwise_or() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 6
+            const_int 1
+            bitwise_or
+            const_int 6
+            const_int 2
+            bitwise_or
+            const_int 1
+            const_int 6
+            bitwise_or
+            const_int 2
+            const_int 6
+            bitwise_or
+            new_array_with_values 4
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(6),
+                Value::from(7),
+                Value::from(6),
+                Value::from(7)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_bitwise_xor() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 6
+            const_int 1
+            bitwise_xor
+            const_int 6
+            const_int 2
+            bitwise_xor
+            const_int 1
+            const_int 6
+            bitwise_xor
+            const_int 2
+            const_int 6
+            bitwise_xor
+            new_array_with_values 4
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(
+            result,
+            Ok(Value::from(vec![
+                Value::from(4),
+                Value::from(7),
+                Value::from(4),
+                Value::from(7)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_bitwise_not() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_int 0
+            bitwise_not
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(-1)));
+    }
+
+    #[test]
+    fn test_not() {
+        let mut agent = Agent::new();
+
+        let mut bytecode = Bytecode::new();
+        bytecode! { (&mut bytecode)
+            const_true
+            not
+        };
+
+        let code = CodeObject::new(bytecode.into());
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter.evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(false)));
+    }
 }
