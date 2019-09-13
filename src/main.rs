@@ -53,6 +53,58 @@ fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Value {
     }
 }
 
+fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::String(s)) = args.get(0) {
+        Value::from(
+            s.chars()
+                .map(|c| Value::from(c.to_string()))
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        panic!("Expected string");
+    }
+}
+
+fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::String(s)) = args.get(0) {
+        Value::from(
+            s.bytes()
+                .map(|b| Value::from(i64::from(b)))
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        panic!("Expected string");
+    }
+}
+
+fn ord(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::String(s)) = args.get(0) {
+        if let Some(c) = s.chars().next() {
+            Value::from(c as i64)
+        } else {
+            panic!("Expected string with length 1");
+        }
+    } else {
+        panic!("Expected string with length 1");
+    }
+}
+
+fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::Array(vs)) = args.get(0) {
+        Value::from(vs.borrow().len() as i64)
+    } else {
+        panic!("Expected array");
+    }
+}
+
+fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::Integer(i)) = args.get(0) {
+        Value::from(i64::from(*i as u32))
+    } else {
+        panic!("Expected integer");
+    }
+}
+
 fn main() -> Result<(), String> {
     let mut agent = Agent::new();
     let mut global = HashMap::new();
@@ -93,54 +145,241 @@ fn main() -> Result<(), String> {
         }),
     );
 
+    global.insert(
+        agent.intern_string("array_length"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("array_length")),
+            arity: 1,
+            function: array_length,
+        }),
+    );
+
+    global.insert(
+        agent.intern_string("string_chars"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("string_chars")),
+            arity: 1,
+            function: string_chars,
+        }),
+    );
+
+    global.insert(
+        agent.intern_string("string_bytes"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("string_bytes")),
+            arity: 1,
+            function: string_bytes,
+        }),
+    );
+
+    global.insert(
+        agent.intern_string("ord"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("ord")),
+            arity: 1,
+            function: ord,
+        }),
+    );
+
+    global.insert(
+        agent.intern_string("truncate32"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("truncate32")),
+            arity: 1,
+            function: truncate32,
+        }),
+    );
+
     let code = {
         let lexer = parser::Lexer::new(
             r#"
-function fib_slow(n) {
-    let seen = array_new(n + 1);
-    seen[0] = 1;
-    seen[1] = 1;
-
-    function do_fib(n) {
-        if seen[n] != null {
-            return seen[n];
-        }
-        let less1 = do_fib(n - 1);
-        let less2 = do_fib(n - 2);
-        seen[n - 1] = less1;
-        seen[n - 2] = less2;
-        return less1 + less2;
-    }
-
-    return do_fib(n);
+function box(value) {
+    return [value];
 }
 
-function fib_fast(n) {
-    let a = 1;
-    let b = 1;
-
-    for let cursor = 0; cursor <= n; cursor = cursor + 1 {
-        if cursor == 0 {
-            continue;
-        }
-        if cursor == 1 {
-            continue;
-        }
-
-        if cursor % 2 == 0 {
-            b = a + b;
-        } else {
-            a = a + b;
-        }
-    }
-
-    if a > b {
-        return a;
-    }
-    return b;
+function unbox(box) {
+    return box[0];
 }
 
-print(fib_slow(46));
+function box_set(box, new_value) {
+    box[0] = new_value;
+}
+
+function linked_list_new() {
+    return box(null);
+}
+
+function linked_list_length(list) {
+    let current = unbox(list);
+    let len = 0;
+
+    while current {
+        len = len + 1;
+        current = current[1];
+    }
+
+    return len;
+}
+
+function linked_list_prepend(list, value) {
+    let current = unbox(list);
+    box_set(list, [value, current]);
+}
+
+function linked_list_append(list, value) {
+    let current = unbox(list);
+    let prev = null;
+    if current == null {
+        box_set(list, [value, null]);
+        return;
+    }
+
+    while current {
+        prev = current;
+        current = current[1];
+    }
+
+    prev[1] = [value, null];
+}
+
+function linked_list_foreach(list, fn) {
+    let current = unbox(list);
+
+    while current {
+        fn(current[0]);
+        current = current[1];
+    }
+}
+
+function linked_list_find(list, fn) {
+    let current = unbox(list);
+
+    while current {
+        if fn(current[0]) {
+            return current;
+        }
+    }
+
+    return null;
+}
+
+let DYNAMIC_ARRAY_INITIAL_SIZE = 16;
+
+function dynamic_array_new() {
+    return [0, array_new(DYNAMIC_ARRAY_INITIAL_SIZE)];
+}
+
+function dynamic_array_push(dynarray, value) {
+    let next_idx = dynarray[0];
+    let array = dynarray[1];
+    let len = array_length(array);
+    if next_idx >= len {
+        let new_array = array_new(2 * len);
+        for let i = 0; i < next_idx; i = i + 1 {
+            new_array[i] = array[i];
+        }
+        dynarray[1] = array = new_array;
+    }
+    array[next_idx] = value;
+    dynarray[0] = next_idx + 1;
+}
+
+function dynamic_array_foreach(dynarray, func) {
+    let next_idx = dynarray[0];
+    let array = dynarray[1];
+
+    for let i = 0; i < next_idx; i = i + 1 {
+        func(array[i], i, array);
+    }
+}
+
+function dynamic_array_find(dynarray, func) {
+    let next_idx = dynarray[0];
+    let array = dynarray[1];
+
+    for let i = 0; i < next_idx; i = i + 1 {
+        if func(array[i], i, array) {
+            return array[i];
+        }
+    }
+
+    return null;
+}
+
+function dynamic_array_to_array(dynarray) {
+    let len = dynarray[0];
+    let array = array_new(len);
+    for let i = 0; i < len; i = i + 1 {
+        array[i] = dynarray[1][i];
+    }
+    return array;
+}
+
+function assoc_list_new() {
+    return dynamic_array_new();
+}
+
+function assoc_list_set(list, key, value) {
+    let found = dynamic_array_find(list, function(x, i) {
+        if x[0] == key {
+            return true;
+        }
+    });
+
+    if found == null {
+        dynamic_array_push(list, [key, value]);
+    } else {
+        found[1] = value;
+    }
+}
+
+function assoc_list_get(list, key) {
+    let found = dynamic_array_find(list, function(x) {
+        if x[0] == key {
+            return true;
+        }
+    });
+
+    if found != null {
+        return found[1];
+    }
+    return null;
+}
+
+let FNV_OFFSET_BASIS_32 = 2166136261;
+let FNV_PRIME_32 = 16777619;
+
+function fnv1a(s) {
+    let bytes = string_bytes(s);
+    let len = array_length(bytes);
+    let hash = FNV_OFFSET_BASIS_32;
+
+    for let i = 0; i < len; i = i + 1 {
+        hash = hash ^ bytes[i];
+        hash = hash * FNV_PRIME_32;
+    }
+
+    return hash;
+}
+
+let HASHTABLE_INITIAL_SIZE = 1024;
+
+function hashtable_new() {
+    return [
+        0,
+        array_new(HASHTABLE_INITIAL_SIZE),
+    ];
+}
+
+function hashtable_insert(table, key, value) {}
+
+let arr = dynamic_array_new();
+
+for let i = 0; i < 10000; i = i + 1 {
+    dynamic_array_push(arr, to_string(i));
+}
+
+print(dynamic_array_to_array(arr));
 "#,
         );
         let parser = parser::Parser::new(&mut agent, lexer);
