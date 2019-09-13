@@ -15,3 +15,11 @@ jobs:
       run: cargo test --verbose
     - name: Run hooks
       run: .hooks/autohook.sh run-hook pre-commit rs
+    - name: Generate coverage report
+      run: |
+        apt-get update && apt-get install libssl-dev pkg-config cmake zlib1g-dev
+        cargo install cargo-tarpaulin
+        cargo tarpaulin --out Xml
+        bash <(curl -s https://codecov.io/bash)
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
