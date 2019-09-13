@@ -511,7 +511,7 @@ impl<'a> Interpreter<'a> {
                     for _ in 0..num_values {
                         values.push(pop!());
                     }
-                    push!(Value::from(values));
+                    push!(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
                 }
 
                 OpCode::ArrayGet => {
@@ -1472,7 +1472,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Ok(Value::from(vec![Value::from(false), Value::from(true)]))
+            Ok(Value::from(vec![Value::from(true), Value::from(false)]))
         );
     }
 
@@ -1497,7 +1497,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Ok(Value::from(vec![Value::from(false), Value::from(true)]))
+            Ok(Value::from(vec![Value::from(true), Value::from(false)]))
         );
     }
 
@@ -1526,9 +1526,9 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
-                Value::from(true),
                 Value::from(false),
-                Value::from(false)
+                Value::from(false),
+                Value::from(true),
             ]))
         );
     }
@@ -1558,9 +1558,9 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
-                Value::from(false),
                 Value::from(true),
-                Value::from(true)
+                Value::from(true),
+                Value::from(false),
             ]))
         );
     }
@@ -1577,8 +1577,8 @@ mod tests {
             const_int 9229
             const_int 9228
             greater_than
-            const_int 9230
             const_int 9229
+            const_int 9230
             greater_than
             new_array_with_values 3
         };
@@ -1590,9 +1590,9 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
+                Value::from(false),
                 Value::from(true),
-                Value::from(true),
-                Value::from(false)
+                Value::from(false),
             ]))
         );
     }
@@ -1624,7 +1624,7 @@ mod tests {
             Ok(Value::from(vec![
                 Value::from(true),
                 Value::from(false),
-                Value::from(true)
+                Value::from(true),
             ]))
         );
     }
@@ -1657,10 +1657,10 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
+                Value::from(0),
                 Value::from(2),
                 Value::from(0),
                 Value::from(2),
-                Value::from(0)
             ]))
         );
     }
@@ -1693,10 +1693,10 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
+                Value::from(7),
                 Value::from(6),
                 Value::from(7),
                 Value::from(6),
-                Value::from(7)
             ]))
         );
     }
@@ -1729,10 +1729,10 @@ mod tests {
         assert_eq!(
             result,
             Ok(Value::from(vec![
+                Value::from(7),
                 Value::from(4),
                 Value::from(7),
                 Value::from(4),
-                Value::from(7)
             ]))
         );
     }
