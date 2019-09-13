@@ -198,9 +198,13 @@ impl std::fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Null => write!(f, "null"),
             Value::Array(vs) => {
+                let len = vs.borrow().len();
                 write!(f, "[")?;
-                for val in vs.borrow().iter() {
+                for (i, val) in vs.borrow().iter().enumerate() {
                     write!(f, "{}", val)?;
+                    if i < len - 1 {
+                        write!(f, ", ")?;
+                    }
                 }
                 write!(f, "]")
             }
