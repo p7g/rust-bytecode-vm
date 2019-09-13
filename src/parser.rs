@@ -95,22 +95,25 @@ impl Token {
             TokenType::Equal => 1,
             TokenType::PipePipe => 2,
             TokenType::AndAnd => 3,
-            TokenType::EqualEqual => 4,
-            TokenType::BangEqual => 4,
-            TokenType::LessThan => 5,
-            TokenType::LessThanEqual => 5,
-            TokenType::GreaterThan => 5,
-            TokenType::GreaterThanEqual => 5,
-            TokenType::LessLess => 6,
-            TokenType::GreaterGreater => 6,
-            TokenType::Plus => 7,
-            TokenType::Minus => 7,
-            TokenType::Star => 8,
-            TokenType::Slash => 9,
-            TokenType::Percent => 10,
-            TokenType::StarStar => 11,
-            TokenType::LeftParen => 13,
-            TokenType::LeftBracket => 13,
+            TokenType::Pipe => 4,
+            TokenType::Caret => 5,
+            TokenType::And => 6,
+            TokenType::EqualEqual => 7,
+            TokenType::BangEqual => 7,
+            TokenType::LessThan => 8,
+            TokenType::LessThanEqual => 8,
+            TokenType::GreaterThan => 8,
+            TokenType::GreaterThanEqual => 8,
+            TokenType::LessLess => 9,
+            TokenType::GreaterGreater => 9,
+            TokenType::Plus => 10,
+            TokenType::Minus => 10,
+            TokenType::Star => 11,
+            TokenType::Slash => 12,
+            TokenType::Percent => 13,
+            TokenType::StarStar => 14,
+            TokenType::LeftParen => 16,
+            TokenType::LeftBracket => 16,
 
             TokenType::Semicolon => 0,
             TokenType::RightParen => 0,
@@ -750,6 +753,9 @@ impl<'a> Parser<'a> {
             | TokenType::GreaterThanEqual
             | TokenType::EqualEqual
             | TokenType::BangEqual
+            | TokenType::Pipe
+            | TokenType::Caret
+            | TokenType::And
             | TokenType::LessLess
             | TokenType::GreaterGreater => self.parse_left_assoc_binary(token, left),
             TokenType::Equal | TokenType::StarStar => self.parse_right_assoc_binary(token, left),
