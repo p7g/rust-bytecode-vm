@@ -1330,6 +1330,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_unary_operation_expression() -> Result<(), String> {
         unimplemented!();
     }
