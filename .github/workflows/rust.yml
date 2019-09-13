@@ -20,6 +20,8 @@ jobs:
         apt-get update && apt-get install libssl-dev pkg-config cmake zlib1g-dev
         cargo install cargo-tarpaulin
         cargo tarpaulin --out Xml
-        bash <(curl -s https://codecov.io/bash)
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v1.0.2
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./cobertura.xml
