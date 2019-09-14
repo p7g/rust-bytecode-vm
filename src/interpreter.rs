@@ -138,13 +138,21 @@ impl<'a> Interpreter<'a> {
             () => {
                 if self.call_stack.is_empty() {
                     return Err("Tried to get executing function in global scope".to_string());
-                } else if let func @ Value::Function(_) = &self.stack[self.bp] {
-                    func.clone()
+                } else if let Some(func) = self.stack.get(self.bp) {
+                    if let func @ Value::Function(_) = func {
+                        func.clone()
+                    } else {
+                        return Err(
+                            "Tried to get executing function but bp didn't point to function"
+                                .to_string(),
+                        );
+                    }
                 } else {
-                    return Err(
-                        "Tried to get executing function but bp didn't point to function"
-                            .to_string(),
-                    );
+                    return Err(format!(
+                        "Base pointer is not within stack: bp={} stack length={}",
+                        self.bp,
+                        self.stack.len()
+                    ));
                 }
             };
         }
