@@ -287,7 +287,7 @@ impl<'a> Interpreter<'a> {
                                 ..
                             } => {
                                 ensure_arity!(*arity, name);
-                                let mut args = Vec::new();
+                                let mut args = Vec::with_capacity(num_args);
                                 for _ in 0..num_args {
                                     args.push(pop!());
                                 }
