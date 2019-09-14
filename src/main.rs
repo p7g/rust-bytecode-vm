@@ -31,6 +31,11 @@ fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Value {
 }
 
 fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    print!("{}", args[0]);
+    Value::Null
+}
+
+fn println(_: &mut Interpreter, args: Vec<Value>) -> Value {
     let mut s = String::new();
 
     for (i, v) in args.iter().map(|v| format!("{}", v)).enumerate() {
@@ -115,6 +120,15 @@ fn main() -> Result<(), String> {
             name: Some(agent.intern_string("print")),
             arity: 1,
             function: print,
+        }),
+    );
+
+    global.insert(
+        agent.intern_string("println"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("println")),
+            arity: 1,
+            function: println,
         }),
     );
 
