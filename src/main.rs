@@ -87,10 +87,18 @@ fn ord(_: &mut Interpreter, args: Vec<Value>) -> Value {
         if let Some(c) = s.chars().next() {
             Value::from(c as i64)
         } else {
-            panic!("Expected string with length 1");
+            panic!("Expected string with length 1, got {:?}", s);
         }
     } else {
         panic!("Expected string with length 1");
+    }
+}
+
+fn chr(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::Integer(n)) = args.get(0) {
+        Value::from((*n as u8 as char).to_string())
+    } else {
+        panic!("Expected integer");
     }
 }
 
@@ -187,6 +195,15 @@ fn main() -> Result<(), String> {
     );
 
     global.insert(
+        agent.intern_string("chr"),
+        Value::Function(FunctionValue::Builtin {
+            name: Some(agent.intern_string("chr")),
+            arity: 1,
+            function: chr,
+        }),
+    );
+
+    global.insert(
         agent.intern_string("ord"),
         Value::Function(FunctionValue::Builtin {
             name: Some(agent.intern_string("ord")),
@@ -217,6 +234,22 @@ function unbox(box) {
 
 function box_set(box, new_value) {
     box[0] = new_value;
+}
+
+function array_find(array, func) {
+    let len = array_length(array);
+    for let i = 0; i < len; i = i + 1 {
+        if func(array[i], i, array) {
+            return array[i];
+        }
+    }
+    return null;
+}
+
+function array_contains(array, thing) {
+    return null != array_find(array, function(i) {
+        return i == thing;
+    });
 }
 
 function linked_list_new() {
@@ -259,9 +292,11 @@ function linked_list_append(list, value) {
 function linked_list_foreach(list, fn) {
     let current = unbox(list);
 
+    let i = 0;
     while current {
-        fn(current[0]);
+        fn(current[0], i);
         current = current[1];
+        i = i + 1;
     }
 }
 
@@ -275,6 +310,22 @@ function linked_list_find(list, fn) {
     }
 
     return null;
+}
+
+function linked_list_reverse(list) {
+    let new_list = linked_list_new();
+    linked_list_foreach(list, function(i) {
+        linked_list_prepend(new_list, i);
+    });
+    return new_list;
+}
+
+function linked_list_to_array(list) {
+    let arr = array_new(linked_list_length(list));
+    linked_list_foreach(list, function(elem, i) {
+        arr[i] = elem;
+    });
+    return arr;
 }
 
 let DYNAMIC_ARRAY_INITIAL_SIZE = 16;
@@ -298,6 +349,14 @@ function dynamic_array_push(dynarray, value) {
     dynarray[0] = next_idx + 1;
 }
 
+function dynamic_array_pop(dynarray) {
+    if dynarray[0] <= 0 {
+        return null;
+    }
+    dynarray[0] = dynarray[0] - 1;
+    return dynarray[1][dynarray[0]];
+}
+
 function dynamic_array_foreach(dynarray, func) {
     let next_idx = dynarray[0];
     let array = dynarray[1];
@@ -318,6 +377,18 @@ function dynamic_array_find(dynarray, func) {
     }
 
     return null;
+}
+
+function dynamic_array_set(dynarray, n, value) {
+    dynarray[1][n] = value;
+}
+
+function dynamic_array_get(dynarray, n) {
+    return dynarray[1][n];
+}
+
+function dynamic_array_length(dynarray) {
+    return dynarray[0];
 }
 
 function dynamic_array_to_array(dynarray) {
