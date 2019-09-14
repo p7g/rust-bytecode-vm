@@ -268,10 +268,10 @@ impl Compiler {
             self.compile_statement(&mut inner_state, &statement)?;
         }
 
-        let ret_code: u8 = OpCode::Return.into();
-        if *self.bytecode.instructions.last().unwrap() != ret_code {
-            self.bytecode.const_null().ret();
-        }
+        // always add return null at the end of a function... this kinda sucks,
+        // but the alternative is a bunch of complicated logic to check if there
+        // is a return in the tail position.
+        self.bytecode.const_null().ret();
 
         self.bytecode.mark_label(end_label);
 
@@ -1150,6 +1150,8 @@ mod tests {
             .const_null()
             .load_local(0)
             .ret()
+            .const_null()
+            .ret()
             .label("end");
         test_statement!("function test() { let b; return b; }", bc)
     }
@@ -1186,6 +1188,8 @@ mod tests {
             .label("test")
             .load_argument(0)
             .ret()
+            .const_null()
+            .ret()
             .label("end");
         test_statement!("function test(a) { return a; }", bc)
     }
@@ -1214,8 +1218,12 @@ mod tests {
             .label("inner")
             .load_upvalue(0)
             .ret()
+            .const_null()
+            .ret()
             .label("inner_end")
             .bind_local(0)
+            .ret()
+            .const_null()
             .ret()
             .label("end");
         test_statement!(
