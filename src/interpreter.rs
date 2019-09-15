@@ -694,6 +694,16 @@ impl<'a> Interpreter<'a> {
                         return Err("Bitwise operations only support integers".to_string());
                     }
                 }
+
+                OpCode::Neg => {
+                    let right = pop!();
+
+                    if let Value::Integer(right) = right {
+                        push!(Value::from(-right));
+                    } else {
+                        return Err("Expected integer in negation expression".to_string());
+                    }
+                }
             }
         }
 

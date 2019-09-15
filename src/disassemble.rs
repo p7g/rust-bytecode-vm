@@ -105,7 +105,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::BitwiseNot
             | OpCode::Not
             | OpCode::LeftShift
-            | OpCode::RightShift => println!("{:?}", instruction),
+            | OpCode::RightShift
+            | OpCode::Neg => println!("{:?}", instruction),
         }
     }
 

@@ -51,6 +51,7 @@ pub enum OpCode {
     Not,
     LeftShift,
     RightShift,
+    Neg,
 }
 
 impl Into<u8> for OpCode {
@@ -113,6 +114,7 @@ impl std::convert::TryFrom<u8> for OpCode {
             46 => OpCode::Not,
             47 => OpCode::LeftShift,
             48 => OpCode::RightShift,
+            49 => OpCode::Neg,
             _ => return Err(format!("{} is out of bounds for OpCode", intval)),
         })
     }

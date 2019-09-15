@@ -30,6 +30,7 @@ pub enum TokenType {
     Semicolon,
     Equal,
     EqualEqual,
+    Tilde,
     Bang,
     BangEqual,
     LessThan,
@@ -131,6 +132,7 @@ impl Token {
             TokenType::LeftBracket => 0,
             TokenType::Bang => 11,
             TokenType::Minus => 11,
+            TokenType::Tilde => 11,
 
             _ => unreachable!(),
         }
@@ -239,6 +241,7 @@ impl<'a> Lexer<'a> {
                 '%' => token!(TokenType::Percent),
                 ';' => token!(TokenType::Semicolon),
                 ',' => token!(TokenType::Comma),
+                '~' => token!(TokenType::Tilde),
                 '*' => or2!('*', TokenType::Star, TokenType::StarStar),
                 '&' => or2!('&', TokenType::And, TokenType::AndAnd),
                 '|' => or2!('|', TokenType::Pipe, TokenType::PipePipe),
@@ -730,7 +733,9 @@ impl<'a> Parser<'a> {
             TokenType::Null => self.parse_null_expression(token),
             TokenType::LeftParen => self.parse_parenthesized_expression(token),
             TokenType::LeftBracket => self.parse_array_expression(token),
-            TokenType::Minus | TokenType::Bang => self.parse_unary_expression(token),
+            TokenType::Minus | TokenType::Bang | TokenType::Tilde => {
+                self.parse_unary_expression(token)
+            }
             TokenType::Function => self.parse_function_expression(token),
 
             _ => Err(format!(

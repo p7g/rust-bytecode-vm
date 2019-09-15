@@ -830,10 +830,22 @@ impl Compiler {
 
     fn compile_unary_operation_expression(
         &mut self,
-        _state: &mut CompilerState,
-        _expression: &Expression,
+        state: &mut CompilerState,
+        expression: &Expression,
     ) -> CompileResult<()> {
-        unimplemented!();
+        if let ExpressionKind::UnaryOperation(op, right) = &expression.value {
+            self.compile_expression(state, right)?;
+            match op {
+                TokenType::Bang => self.bytecode.not(),
+                TokenType::Tilde => self.bytecode.bitwise_not(),
+                TokenType::Minus => self.bytecode.neg(),
+                _ => unreachable!(),
+            };
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
     }
 
     fn compile_index_expression(
@@ -1338,8 +1350,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_unary_operation_expression() -> Result<(), String> {
-        unimplemented!();
+        let mut bc = Bytecode::new();
+        bc.const_int(1)
+            .bitwise_not()
+            .const_int(2)
+            .less_than()
+            .const_false()
+            .not()
+            .equal()
+            .pop();
+        test_statement!("~1 < 2 == !false;", bc)
     }
 }
