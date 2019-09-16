@@ -7,8 +7,8 @@
 - [x] replace string escapes with actual characters in lexer
 - [ ] write compiler (AST -> bytecode)
     - [x] statements
-    - [ ] expressions
-    - [ ] tests
+    - [x] expressions
+    - [x] tests
 - [ ] import/export
     - decide: happens at runtime (by VM) or before
 - [ ] standard library stuff
