@@ -22,7 +22,7 @@ use disassemble::disassemble;
 use interpreter::Interpreter;
 use value::{FunctionValue, Value};
 
-fn to_string(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn tostring(_: &mut Interpreter, args: Vec<Value>) -> Value {
     Value::from(format!("{}", args[0]))
 }
 
@@ -141,18 +141,18 @@ fn main() -> Result<(), String> {
     );
 
     global.insert(
-        agent.intern_string("to_string"),
+        agent.intern_string("tostring"),
         Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("to_string")),
+            name: Some(agent.intern_string("tostring")),
             arity: 1,
-            function: to_string,
+            function: tostring,
         }),
     );
 
     global.insert(
-        agent.intern_string("type_of"),
+        agent.intern_string("typeof"),
         Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("type_of")),
+            name: Some(agent.intern_string("typeof")),
             arity: 1,
             function: type_of,
         }),
