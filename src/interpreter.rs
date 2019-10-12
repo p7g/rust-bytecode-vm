@@ -76,7 +76,7 @@ impl<'a> Interpreter<'a> {
         }
         macro_rules! next {
             () => {{
-                let inst = code_object.instructions.get(self.ip);
+                let inst = code_object.instructions.get(self.ip).cloned();
                 self.ip += 1;
                 inst
             }};
@@ -84,9 +84,7 @@ impl<'a> Interpreter<'a> {
                 let mut array = [0u8; $expr];
 
                 for i in 0..$expr {
-                    let result: Result<&u8, String> =
-                        next!().ok_or_else(|| "Unexpected end of bytecode".to_string());
-                    let n: u8 = *result?;
+                    let n = next!().ok_or_else(|| "Unexpected end of bytecode".to_string())?;
                     array[i] = n;
                 }
 
@@ -194,11 +192,11 @@ impl<'a> Interpreter<'a> {
             if cfg!(vm_debug) {
                 println!("--------------");
                 print_stack!(&self.stack);
-                println!("{:?}", OpCode::try_from(instruction)?);
+                println!("{:?}", OpCode::from(instruction));
                 println!("ip: {} sp: {} bp: {}", self.ip, self.sp, self.bp);
             }
 
-            match OpCode::try_from(instruction)? {
+            match OpCode::from(instruction) {
                 OpCode::Halt => break,
 
                 OpCode::ConstInt => {

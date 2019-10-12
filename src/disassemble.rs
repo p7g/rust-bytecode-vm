@@ -9,7 +9,7 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
 
     macro_rules! next {
         () => {{
-            let inst = code_object.instructions.get(ip);
+            let inst = code_object.instructions.get(ip).cloned();
             ip += 1;
             inst
         }};
@@ -17,8 +17,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             let mut arr = [0u8; $count];
 
             for i in 0..$count {
-                let result = next!().ok_or("Unexpected end of bytecode".to_string());
-                arr[i] = *result?;
+                let result = next!().ok_or_else(|| "Unexpected end of bytecode".to_string());
+                arr[i] = result?;
             }
 
             arr
@@ -27,7 +27,7 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
 
     while let Some(instruction) = next!() {
         print!("{}: ", ip - 1);
-        let instruction = OpCode::try_from(instruction)?;
+        let instruction = OpCode::from(instruction);
         match instruction {
             OpCode::ConstInt => {
                 println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(8)));
