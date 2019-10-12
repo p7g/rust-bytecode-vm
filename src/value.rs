@@ -257,13 +257,12 @@ impl PartialEq for Value {
             }
             Value::Array(a) => {
                 if let Value::Array(b) = other {
-                    if a.borrow().len() != b.borrow().len() {
+                    let a = a.borrow();
+                    let b = b.borrow();
+                    if a.len() != b.len() {
                         false
                     } else {
-                        a.borrow()
-                            .iter()
-                            .zip(b.borrow().iter())
-                            .all(|(a, b)| a == b)
+                        a.iter().zip(b.iter()).all(|(a, b)| a == b)
                     }
                 } else {
                     false
