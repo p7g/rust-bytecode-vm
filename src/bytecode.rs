@@ -75,14 +75,10 @@ impl Bytecode {
             self.usize(address)
         } else {
             let current_address = self.instructions.len();
-            if !self.pending_addresses.contains_key(name) {
-                self.pending_addresses.insert(name, vec![current_address]);
-            } else {
-                self.pending_addresses
-                    .get_mut(name)
-                    .unwrap()
-                    .push(current_address);
-            }
+            self.pending_addresses
+                .entry(name)
+                .and_modify(|a| a.push(current_address))
+                .or_insert_with(|| vec![current_address]);
 
             self.usize(0)
         }

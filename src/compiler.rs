@@ -288,11 +288,6 @@ impl Compiler {
                     BindingType::Argument => self.bytecode.bind_argument(binding.index),
                     BindingType::Upvalue => self.bytecode.bind_upvalue(binding.index),
                 };
-            //} else if state.scope.is_some() && state.scope.as_ref().unwrap().get_binding(*free_variable).is_some() {
-            //    let binding = state.scope.as_ref().unwrap().get_binding(*free_variable);
-            //    match binding.typ {
-            //        BindingType::Argument =>
-            //    }
             } else if let Some(scope) = &inner_state.scope {
                 if scope.parent_has_binding(*free_variable) {
                     if let Some(function_state) = &mut state.function_state {

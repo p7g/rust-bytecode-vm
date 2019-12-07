@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 
@@ -69,9 +69,20 @@ impl<'a> Interpreter<'a> {
                 val
             }};
             ($num:expr) => {{
-                for _ in 0..$num {
-                    pop!();
-                }
+                self.sp = self.sp.saturating_sub($num);
+                self.stack.truncate(self.sp);
+            }};
+        }
+        macro_rules! pop_and_get {
+            ($num:expr) => {{
+                let vals = self
+                    .stack
+                    .split_off(self.sp - $num)
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>();
+                self.sp -= $num;
+                vals
             }};
         }
         macro_rules! next {
@@ -84,9 +95,9 @@ impl<'a> Interpreter<'a> {
                 let mut array = [0u8; $expr];
 
                 for i in 0..$expr {
-                    let n = next!().ok_or_else(|| "Unexpected end of bytecode".to_string())?;
-                    array[i] = n;
+                    array[i] = code_object.instructions[self.ip + i];
                 }
+                self.ip += $expr;
 
                 array
             }};
@@ -285,10 +296,7 @@ impl<'a> Interpreter<'a> {
                                 ..
                             } => {
                                 ensure_arity!(*arity, name);
-                                let mut args = Vec::with_capacity(num_args);
-                                for _ in 0..num_args {
-                                    args.push(pop!());
-                                }
+                                let args = pop_and_get!(num_args);
                                 let result = function(self, args);
                                 push!(result);
                             }

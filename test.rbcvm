@@ -2,12 +2,12 @@ function box(value) {
     return [value];
 }
 
-function unbox(box) {
-    return box[0];
-}
-
 function box_set(box, new_value) {
     box[0] = new_value;
+}
+
+function box_get(box) {
+    return box[0];
 }
 
 function array_find(array, func) {
@@ -33,12 +33,23 @@ function array_contains(array, thing) {
     });
 }
 
+function array_map(array, func) {
+    let len = array_length(array);
+    let new_array = array_new(length);
+
+    for let i = 0; i < len; i = i + 1 {
+        new_array[i] = func(array[i], i, array);
+    }
+
+    return new_array;
+}
+
 function ll_new() {
     return box(null);
 }
 
 function ll_length(list) {
-    let current = unbox(list);
+    let current = box_get(list);
     let len = 0;
 
     while current {
@@ -50,12 +61,12 @@ function ll_length(list) {
 }
 
 function ll_prepend(list, value) {
-    let current = unbox(list);
+    let current = box_get(list);
     box_set(list, [value, current]);
 }
 
 function ll_append(list, value) {
-    let current = unbox(list);
+    let current = box_get(list);
     let prev = null;
     if current == null {
         box_set(list, [value, null]);
@@ -71,7 +82,7 @@ function ll_append(list, value) {
 }
 
 function ll_foreach(list, fn) {
-    let current = unbox(list);
+    let current = box_get(list);
 
     let i = 0;
     while current {
@@ -82,7 +93,7 @@ function ll_foreach(list, fn) {
 }
 
 function ll_find(list, fn) {
-    let current = unbox(list);
+    let current = box_get(list);
 
     while current {
         if fn(current[0]) {
@@ -101,6 +112,16 @@ function ll_reverse(list) {
     return new_list;
 }
 
+function ll_map(list, func) {
+    let new_list = ll_new();
+
+    ll_foreach(list, function(val, i) {
+        ll_append(new_list, func(val, i, list));
+    });
+
+    return new_list;
+}
+
 function ll_to_array(list) {
     let arr = array_new(ll_length(list));
     ll_foreach(list, function(elem, i) {
@@ -111,8 +132,12 @@ function ll_to_array(list) {
 
 let DA_INITIAL_SIZE = 16;
 
+function da_with_cap(cap) {
+    return [0, array_new(cap)];
+}
+
 function da_new() {
-    return [0, array_new(DA_INITIAL_SIZE)];
+    return da_with_cap(DA_INITIAL_SIZE);
 }
 
 function da_push(dynarray, value) {
@@ -160,6 +185,17 @@ function da_indexof(dynarray, func) {
     return -1;
 }
 
+function da_map(self, func) {
+    let len = da_length(self);
+    let new_array = da_with_cap(len);
+
+    for let i = 0; i < len; i = i + 1 {
+        da_set(new_array, i, func(da_get(self, i), i, self));
+    }
+
+    return new_array;
+}
+
 function da_find(dynarray, func) {
     let idx = da_indexof(dynarray, func);
     if idx >= 0 {
@@ -189,11 +225,11 @@ function da_to_array(dynarray) {
     return array;
 }
 
-function al_new() {
+function alist_new() {
     return da_new();
 }
 
-function al_set(list, key, value) {
+function alist_set(list, key, value) {
     let found = da_find(list, function(x, i) {
         if x[0] == key {
             return true;
@@ -207,7 +243,7 @@ function al_set(list, key, value) {
     }
 }
 
-function al_get(list, key) {
+function alist_get(list, key) {
     let found = da_find(list, function(x) {
         if x[0] == key {
             return true;
@@ -280,7 +316,7 @@ function hm_hash(hm, key) {
 
 function hm_grow(hm) {
     hm[HM_CAP] = hm[HM_CAP] * 2;
-    let old_buckets = hm[HM_BUCKETS];
+    let oldbuckets = hm[HM_BUCKETS];
     hm[HM_BUCKETS] = array_new(hm[HM_CAP]);
     hm[HM_LOAD] = 0;
     let len = array_length(oldbuckets);
@@ -522,5 +558,13 @@ Pointer :   ^
 >++.                    And finally a newline from Cell #6
 ";
 
-let parsed = bf_parse(prog);
-bf_run(parsed);
+"let parsed = bf_parse(prog);
+bf_run(parsed);";
+
+let myarray = da_new();
+
+for let i = 0; i < 10; i = i + 1 {
+  da_push(myarray, i);
+}
+
+println(da_map(myarray));
