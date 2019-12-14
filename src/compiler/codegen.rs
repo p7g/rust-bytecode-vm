@@ -1,6 +1,6 @@
-use crate::bytecode::Bytecode;
+use crate::compiler::bytecode::Bytecode;
+use crate::compiler::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
 use crate::opcode::OpCode;
-use crate::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
 
 pub type CompileResult<T> = Result<T, String>;
 
@@ -140,15 +140,13 @@ impl<'a> CompilerState<'a> {
     }
 }
 
-pub struct Compiler {
+pub struct CodeGen {
     bytecode: Bytecode,
 }
 
-impl Compiler {
-    pub fn new() -> Compiler {
-        Compiler {
-            bytecode: Bytecode::new(),
-        }
+impl CodeGen {
+    pub fn new(bytecode: Bytecode) -> CodeGen {
+        CodeGen { bytecode }
     }
 
     pub fn compile<'a, T>(mut self, statements: T) -> CompileResult<Vec<u8>>

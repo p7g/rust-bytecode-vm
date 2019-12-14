@@ -422,12 +422,19 @@ pub enum ExpressionKind {
 
 pub type ParseResult<T> = Result<T, String>;
 
+#[inline]
 fn assert_ident(ident: &Expression) -> ParseResult<()> {
     if let ExpressionKind::Identifier(_) = ident.value {
         Ok(())
     } else {
         Err(format!("Expected identifier at {}", ident.position))
     }
+}
+
+pub(crate) struct ParsedModule
+{
+    imports: Vec<String>,
+    statements: Vec<ParseResult<Statement>>,
 }
 
 pub struct Parser<'a> {
@@ -443,6 +450,22 @@ impl<'a> Parser<'a> {
             lexer: lexer.peekable(),
             current_token: None,
         }
+    }
+
+    pub fn parse(&mut self) -> ParseResult<ParsedModule> {
+        let (imports, statements) = self.partition(|s| {
+            if let Ok(Statement {
+                value: StatementKind::Import(_),
+                ..
+            }) = s
+            {
+                true
+            } else {
+                false
+            }
+        });
+
+        Ok(ParsedModule { imports: imports.collect::<Result<_, _>>()?, statements })
     }
 
     pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
