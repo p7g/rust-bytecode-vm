@@ -1,15 +1,12 @@
-use std::convert::TryFrom;
-
 use crate::agent::Agent;
-use crate::code_object::CodeObject;
 use crate::opcode::OpCode;
 
-pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String> {
+pub fn disassemble(agent: &Agent, code: &Vec<u8>) -> Result<(), String> {
     let mut ip = 0;
 
     macro_rules! next {
         () => {{
-            let inst = code_object.instructions.get(ip).cloned();
+            let inst = code.get(ip).cloned();
             ip += 1;
             inst
         }};
@@ -62,10 +59,20 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             OpCode::LoadGlobal
             | OpCode::DeclareGlobal
             | OpCode::StoreGlobal
-            | OpCode::ConstString => {
+            | OpCode::ConstString
+            | OpCode::InitModule => {
                 println!(
                     "{:?}({:?})",
                     instruction,
+                    agent.string_table[usize::from_le_bytes(next!(8))],
+                );
+            }
+
+            OpCode::LoadFromModule => {
+                println!(
+                    "{:?}({:?}.{:?})",
+                    instruction,
+                    agent.string_table[usize::from_le_bytes(next!(8))],
                     agent.string_table[usize::from_le_bytes(next!(8))],
                 );
             }
@@ -106,7 +113,8 @@ pub fn disassemble(agent: &Agent, code_object: &CodeObject) -> Result<(), String
             | OpCode::Not
             | OpCode::LeftShift
             | OpCode::RightShift
-            | OpCode::Neg => println!("{:?}", instruction),
+            | OpCode::Neg
+            | OpCode::EndModule => println!("{:?}", instruction),
         }
     }
 

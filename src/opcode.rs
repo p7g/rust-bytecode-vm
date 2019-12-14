@@ -1,4 +1,3 @@
-// When adding to this enum, make sure to add to TryFrom<u8>
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[repr(u8)]
 pub enum OpCode {
@@ -34,6 +33,7 @@ pub enum OpCode {
     StoreUpvalue,
     LoadArgument,
     StoreArgument,
+    LoadFromModule,
     NewArray,
     NewArrayWithValues,
     ArrayGet,
@@ -52,6 +52,8 @@ pub enum OpCode {
     LeftShift,
     RightShift,
     Neg,
+    InitModule,
+    EndModule,
 }
 
 impl Into<u8> for OpCode {

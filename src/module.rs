@@ -1,25 +1,49 @@
-use std::collections::HashMap;
-
+use crate::agent::Agent;
 use crate::value::Value;
+use std::collections::{HashMap, HashSet};
 
-pub struct Module<'a> {
-    pub name: &'a str,
-    exports: HashMap<usize, Value>,
+#[derive(Debug)]
+pub struct ModuleSpec {
+    pub name: usize,
+    exports: HashSet<usize>,
 }
 
-impl<'a> Module<'a> {
-    pub fn new(name: &'a str) -> Module<'a> {
-        Module {
+impl ModuleSpec {
+    pub fn new(name: usize) -> Self {
+        Self {
             name,
-            exports: HashMap::new(),
+            exports: HashSet::new(),
         }
     }
 
-    pub fn export(&mut self, name: usize, value: Value) {
-        self.exports.insert(name, value);
+    pub fn add_export(&mut self, name: usize) {
+        self.exports.insert(name);
+    }
+}
+
+#[derive(Debug)]
+pub struct Module {
+    pub global_scope: HashMap<usize, Value>,
+    spec: ModuleSpec,
+}
+
+impl Module {
+    pub fn new(spec: ModuleSpec, global_scope: HashMap<usize, Value>) -> Self {
+        Self { global_scope, spec }
     }
 
-    pub fn get(&self, idx: usize) -> Option<&Value> {
-        self.exports.get(&idx)
+    pub fn name(&self) -> usize {
+        self.spec.name
+    }
+
+    pub fn resolve_export(&self, agent: &Agent, name: usize) -> Result<Value, String> {
+        if let Some(val) = self.global_scope.get(&name).cloned() {
+            Ok(val)
+        } else {
+            Err(format!(
+                "Module {} has no export {}",
+                agent.string_table[self.spec.name], agent.string_table[name]
+            ))
+        }
     }
 }

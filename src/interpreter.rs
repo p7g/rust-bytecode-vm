@@ -5,8 +5,8 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 
 use crate::agent::Agent;
-use crate::code_object::CodeObject;
-use crate::disassemble::disassemble;
+use crate::compiler::disassemble::disassemble;
+use crate::module::{Module, ModuleSpec};
 use crate::opcode::OpCode;
 use crate::value::{FunctionValue, Upvalue, Value};
 
@@ -24,8 +24,9 @@ macro_rules! print_stack {
 }
 
 pub struct Interpreter<'a> {
-    agent: &'a mut Agent,
-    pub global: HashMap<usize, Value>,
+    pub agent: &'a mut Agent,
+    intrinsics: HashMap<usize, Value>,
+    current_module: Option<Module>,
     call_stack: Vec<usize>,
     stack: Vec<Value>,
     ip: usize,
@@ -35,13 +36,17 @@ pub struct Interpreter<'a> {
 
 impl<'a> Interpreter<'a> {
     pub fn new(agent: &'a mut Agent) -> Interpreter<'a> {
-        Interpreter::with_global(agent, HashMap::new())
+        Interpreter::with_intrinsics(agent, HashMap::new())
     }
 
-    pub fn with_global(agent: &'a mut Agent, global: HashMap<usize, Value>) -> Interpreter<'a> {
+    pub fn with_intrinsics(
+        agent: &'a mut Agent,
+        intrinsics: HashMap<usize, Value>,
+    ) -> Interpreter<'a> {
         Interpreter {
             agent,
-            global,
+            intrinsics,
+            current_module: None,
             call_stack: Vec::new(),
             stack: Vec::new(),
             ip: 0,
@@ -51,9 +56,9 @@ impl<'a> Interpreter<'a> {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    pub fn evaluate(&mut self, code_object: CodeObject) -> Result<Value, String> {
+    pub fn evaluate(&mut self, code: Vec<u8>) -> Result<Value, String> {
         if cfg!(vm_debug) {
-            disassemble(self.agent, &code_object)?;
+            disassemble(self.agent, &code)?;
         }
 
         macro_rules! push {
@@ -87,7 +92,7 @@ impl<'a> Interpreter<'a> {
         }
         macro_rules! next {
             () => {{
-                let inst = code_object.instructions.get(self.ip).cloned();
+                let inst = code.get(self.ip).cloned();
                 self.ip += 1;
                 inst
             }};
@@ -95,7 +100,7 @@ impl<'a> Interpreter<'a> {
                 let mut array = [0u8; $expr];
 
                 for i in 0..$expr {
-                    array[i] = code_object.instructions[self.ip + i];
+                    array[i] = code[self.ip + i];
                 }
                 self.ip += $expr;
 
@@ -299,6 +304,11 @@ impl<'a> Interpreter<'a> {
                                 let args = pop_and_get!(num_args);
                                 let result = function(self, args);
                                 push!(result);
+                                if let Some(name) = name {
+                                    if &self.agent.string_table[*name] == "include" {
+                                        println!("{:#?}", self.agent.modules);
+                                    }
+                                }
                             }
                             FunctionValue::User {
                                 arity,
@@ -362,30 +372,44 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::LoadGlobal => {
                     let id = usize::from_le_bytes(next!(8));
-                    if let Some(val) = self.global.get(&id) {
-                        push!(val.clone());
+                    if let Some(module) = &mut self.current_module {
+                        if let Some(val) = module.global_scope.get(&id) {
+                            push!(val.clone());
+                        } else {
+                            return Err(format!(
+                                "ReferenceError: {} is not defined",
+                                self.agent.string_table[id]
+                            ));
+                        }
                     } else {
-                        return Err(format!(
-                            "ReferenceError: {} is not defined",
-                            self.agent.string_table[id]
-                        ));
+                        unreachable!();
                     }
                 }
 
                 OpCode::DeclareGlobal => {
                     let id = usize::from_le_bytes(next!(8));
-                    self.global.insert(id, Value::Null);
+
+                    if let Some(module) = &mut self.current_module {
+                        module.global_scope.insert(id, Value::Null);
+                    } else {
+                        unreachable!();
+                    }
                 }
 
                 OpCode::StoreGlobal => {
                     let id = usize::from_le_bytes(next!(8));
-                    if self.global.contains_key(&id) {
-                        self.global.insert(id, top!().clone());
+
+                    if let Some(module) = &mut self.current_module {
+                        if module.global_scope.contains_key(&id) {
+                            module.global_scope.insert(id, top!().clone());
+                        } else {
+                            return Err(format!(
+                                "ReferenceError: {} is not defined",
+                                self.agent.string_table[id]
+                            ));
+                        }
                     } else {
-                        return Err(format!(
-                            "ReferenceError: {} is not defined",
-                            self.agent.string_table[id]
-                        ));
+                        unreachable!();
                     }
                 }
 
@@ -512,6 +536,21 @@ impl<'a> Interpreter<'a> {
                 OpCode::StoreArgument => {
                     let idx = usize::from_le_bytes(next!(8));
                     arguments![idx] = top!().clone();
+                }
+
+                OpCode::LoadFromModule => {
+                    let module_name = usize::from_le_bytes(next!(8));
+                    let export_name = usize::from_le_bytes(next!(8));
+
+                    push!(self
+                        .agent
+                        .modules
+                        .get(&module_name)
+                        .ok_or_else(|| format!(
+                            "Unknown module {}",
+                            self.agent.string_table[module_name]
+                        ))?
+                        .resolve_export(self.agent, export_name)?);
                 }
 
                 OpCode::NewArray => {
@@ -710,6 +749,22 @@ impl<'a> Interpreter<'a> {
                         return Err("Expected integer in negation expression".to_string());
                     }
                 }
+
+                OpCode::InitModule => {
+                    let name = usize::from_le_bytes(next!(8));
+
+                    debug_assert!(self.current_module.is_none());
+                    self.current_module =
+                        Some(Module::new(ModuleSpec::new(name), self.intrinsics.clone()));
+                }
+
+                OpCode::EndModule => {
+                    let module = self.current_module.take();
+                    debug_assert!(module.is_some());
+
+                    let module = module.unwrap();
+                    self.agent.modules.insert(module.name(), module);
+                }
             }
         }
 
@@ -724,7 +779,7 @@ impl<'a> Interpreter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bytecode::Bytecode;
+    use crate::compiler::bytecode::Bytecode;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -735,7 +790,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.halt().const_true();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode.into()));
+        let result = interpreter.evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -747,7 +802,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.const_int(123);
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
@@ -761,7 +816,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.const_double(1.23);
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
 
         let result = interpreter.evaluate(code);
         assert_eq!(result, Ok(Value::from(1.23)));
@@ -775,7 +830,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.const_true();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode.into()));
+        let result = interpreter.evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::from(true)));
     }
 
@@ -787,7 +842,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.const_false();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode.into()));
+        let result = interpreter.evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::from(false)));
     }
 
@@ -799,7 +854,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.const_null();
 
-        let result = interpreter.evaluate(CodeObject::new(bytecode.into()));
+        let result = interpreter.evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -813,7 +868,7 @@ mod tests {
         };
 
         let mut interpreter = Interpreter::new(&mut agent);
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
 
         let result = interpreter.evaluate(code);
         assert_eq!(result, Ok(Value::from("hello world")));
@@ -831,7 +886,7 @@ mod tests {
             add
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(124.23)));
@@ -849,7 +904,7 @@ mod tests {
             sub
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(121.77)));
@@ -867,7 +922,7 @@ mod tests {
             mul
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(246f64)));
@@ -885,7 +940,7 @@ mod tests {
             div
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(62f64)));
@@ -903,7 +958,7 @@ mod tests {
             mod
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(0f64)));
@@ -921,7 +976,7 @@ mod tests {
             exp
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(16)));
@@ -944,7 +999,7 @@ mod tests {
             halt
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(48)));
@@ -971,7 +1026,7 @@ mod tests {
             sub
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -998,7 +1053,7 @@ mod tests {
             halt
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1032,9 +1087,9 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
-        crate::disassemble::disassemble(&agent, &code).unwrap();
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let code = bytecode.into();
+        crate::compiler::disassemble::disassemble(&agent, &code).unwrap();
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
@@ -1050,7 +1105,7 @@ mod tests {
             pop
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1069,7 +1124,7 @@ mod tests {
             load_local 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1091,7 +1146,7 @@ mod tests {
             load_local 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1110,8 +1165,8 @@ mod tests {
             load_global (agent.intern_string("test"))
         };
 
-        let code = CodeObject::new(bytecode.into());
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from("test")));
@@ -1125,7 +1180,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.declare_global(ident_hello);
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1146,8 +1201,8 @@ mod tests {
             exp
         };
 
-        let code = CodeObject::new(bytecode.into());
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(27)));
@@ -1170,7 +1225,7 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1196,7 +1251,7 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1228,7 +1283,7 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1259,7 +1314,7 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1285,7 +1340,7 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1341,13 +1396,13 @@ mod tests {
             call 0
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
 
         let mut global = HashMap::new();
         global.insert(a, Value::Null);
         global.insert(b, Value::Null);
 
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2)));
@@ -1371,7 +1426,7 @@ mod tests {
             call 1
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1400,7 +1455,7 @@ mod tests {
             call 1
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1416,7 +1471,7 @@ mod tests {
             new_array 10
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1439,8 +1494,8 @@ mod tests {
             array_get
         };
 
-        let code = CodeObject::new(bytecode.into());
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
@@ -1465,8 +1520,8 @@ mod tests {
             load_global array
         };
 
-        let code = CodeObject::new(bytecode.into());
-        let mut interpreter = Interpreter::with_global(&mut agent, global);
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
 
         assert_eq!(
@@ -1490,7 +1545,7 @@ mod tests {
             new_array_with_values 2
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1515,7 +1570,7 @@ mod tests {
             new_array_with_values 2
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1543,7 +1598,7 @@ mod tests {
             new_array_with_values 3
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1575,7 +1630,7 @@ mod tests {
             new_array_with_values 3
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1607,7 +1662,7 @@ mod tests {
             new_array_with_values 3
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1639,7 +1694,7 @@ mod tests {
             new_array_with_values 3
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1674,7 +1729,7 @@ mod tests {
             new_array_with_values 4
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1710,7 +1765,7 @@ mod tests {
             new_array_with_values 4
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1746,7 +1801,7 @@ mod tests {
             new_array_with_values 4
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1771,7 +1826,7 @@ mod tests {
             bitwise_not
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1788,7 +1843,7 @@ mod tests {
             not
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1806,7 +1861,7 @@ mod tests {
             shift_left
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 
@@ -1824,7 +1879,7 @@ mod tests {
             shift_right
         };
 
-        let code = CodeObject::new(bytecode.into());
+        let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter.evaluate(code);
 

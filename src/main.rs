@@ -19,6 +19,7 @@ use agent::Agent;
 // use bytecode::Bytecode;
 // use code_object::CodeObject;
 // use disassemble::disassemble;
+use compiler::Compiler;
 use interpreter::Interpreter;
 use value::{FunctionValue, Value};
 
@@ -118,7 +119,7 @@ fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Value {
     }
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut agent = Agent::new();
     let mut global = HashMap::new();
 
@@ -221,6 +222,17 @@ fn main() -> Result<(), String> {
         }),
     );
 
+    let mut compiler = Compiler::new(&mut agent);
+
+    let args = std::env::args().collect::<Vec<_>>();
+    let filename = args.get(1).expect("Expected filename");
+
+    compiler.compile_file(filename)?;
+    let code = compiler.code();
+
+    let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
+    interpreter.evaluate(code.unwrap())?;
+
     // let code = {
     //     let args = std::env::args().collect::<Vec<_>>();
     //     let filename = args.get(1).expect("Expected filename");
@@ -233,7 +245,7 @@ fn main() -> Result<(), String> {
     //     compiler.compile(statements.iter())?
     // };
 
-    // let code_object = CodeObject::new(code);
+    // let code_object = code;
     // // disassemble(&agent, &code_object)?;
     // let mut interpreter = Interpreter::with_global(&mut agent, global);
     // interpreter.evaluate(code_object)?;

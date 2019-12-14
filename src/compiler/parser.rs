@@ -40,6 +40,7 @@ pub enum TokenType {
     GreaterGreater,
     GreaterThanEqual,
     Comma,
+    Dot,
 
     Return,
     Function,
@@ -52,6 +53,9 @@ pub enum TokenType {
     Let,
     True,
     False,
+    Module,
+    Export,
+    Import,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -115,6 +119,7 @@ impl Token {
             TokenType::StarStar => 14,
             TokenType::LeftParen => 16,
             TokenType::LeftBracket => 16,
+            TokenType::Dot => 17,
 
             TokenType::Semicolon => 0,
             TokenType::RightParen => 0,
@@ -242,6 +247,7 @@ impl<'a> Lexer<'a> {
                 ';' => token!(TokenType::Semicolon),
                 ',' => token!(TokenType::Comma),
                 '~' => token!(TokenType::Tilde),
+                '.' => token!(TokenType::Dot),
                 '*' => or2!('*', TokenType::Star, TokenType::StarStar),
                 '&' => or2!('&', TokenType::And, TokenType::AndAnd),
                 '|' => or2!('|', TokenType::Pipe, TokenType::PipePipe),
@@ -300,6 +306,9 @@ impl<'a> Lexer<'a> {
                         "null" => token!(TokenType::Null),
                         "true" => token!(TokenType::True),
                         "false" => token!(TokenType::False),
+                        "module" => token!(TokenType::Module),
+                        "export" => token!(TokenType::Export),
+                        "import" => token!(TokenType::Import),
                         _ => token!(TokenType::Identifier),
                     }
                 }
@@ -393,6 +402,8 @@ pub enum StatementKind {
     Continue,
     Return(Option<Expression>),
     Expression(Expression),
+    Export(Box<Statement>),
+    Import(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -431,16 +442,17 @@ fn assert_ident(ident: &Expression) -> ParseResult<()> {
     }
 }
 
-pub(crate) struct ParsedModule
-{
-    imports: Vec<String>,
-    statements: Vec<ParseResult<Statement>>,
+pub(crate) struct ParsedModule {
+    pub(crate) name: usize,
+    pub(crate) imports: Vec<String>,
+    pub(crate) statements: Vec<Statement>,
 }
 
 pub struct Parser<'a> {
     agent: &'a mut Agent,
     lexer: Peekable<Lexer<'a>>,
     current_token: Option<Token>,
+    module_name: Option<usize>,
 }
 
 impl<'a> Parser<'a> {
@@ -449,23 +461,46 @@ impl<'a> Parser<'a> {
             agent,
             lexer: lexer.peekable(),
             current_token: None,
+            module_name: None,
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<ParsedModule> {
-        let (imports, statements) = self.partition(|s| {
-            if let Ok(Statement {
-                value: StatementKind::Import(_),
-                ..
-            }) = s
-            {
-                true
-            } else {
-                false
-            }
-        });
+    pub(crate) fn parse(&mut self) -> ParseResult<ParsedModule> {
+        let (imports, statements): (Vec<ParseResult<Statement>>, Vec<ParseResult<Statement>>) =
+            self.partition(|s| {
+                if let Ok(Statement {
+                    value: StatementKind::Import(_),
+                    ..
+                }) = s
+                {
+                    true
+                } else {
+                    false
+                }
+            });
 
-        Ok(ParsedModule { imports: imports.collect::<Result<_, _>>()?, statements })
+        let imports = imports
+            .into_iter()
+            .map(|i| {
+                if let Ok(i) = i {
+                    if let StatementKind::Import(path) = i.value {
+                        Ok(path)
+                    } else {
+                        unreachable!();
+                    }
+                } else if let Err(e) = i {
+                    Err(e)
+                } else {
+                    unreachable!();
+                }
+            })
+            .collect::<ParseResult<Vec<_>>>()?;
+
+        Ok(ParsedModule {
+            name: self.module_name.unwrap(),
+            imports,
+            statements: statements.into_iter().collect::<ParseResult<Vec<_>>>()?,
+        })
     }
 
     pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
@@ -520,20 +555,28 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> ParseResult<Statement> {
-        if let Some(token) = self.peek()? {
-            match token.typ {
-                TokenType::Let => self.parse_let_declaration(),
-                TokenType::Function => self.parse_function_declaration(),
-                TokenType::If => self.parse_if_statement(),
-                TokenType::While => self.parse_while_statement(),
-                TokenType::For => self.parse_for_statement(),
-                TokenType::Continue => self.parse_continue_statement(),
-                TokenType::Break => self.parse_break_statement(),
-                TokenType::Return => self.parse_return_statement(),
-                _ => self.parse_expression_statement(),
-            }
-        } else {
-            unreachable!();
+        loop {
+            return if let Some(token) = self.peek()? {
+                match token.typ {
+                    TokenType::Let => self.parse_let_declaration(),
+                    TokenType::Function => self.parse_function_declaration(),
+                    TokenType::If => self.parse_if_statement(),
+                    TokenType::While => self.parse_while_statement(),
+                    TokenType::For => self.parse_for_statement(),
+                    TokenType::Continue => self.parse_continue_statement(),
+                    TokenType::Break => self.parse_break_statement(),
+                    TokenType::Return => self.parse_return_statement(),
+                    TokenType::Export => self.parse_export_statement(),
+                    TokenType::Import => self.parse_import_statement(),
+                    TokenType::Module => {
+                        self.parse_module_statement()?;
+                        continue;
+                    }
+                    _ => self.parse_expression_statement(),
+                }
+            } else {
+                unreachable!();
+            };
         }
     }
 
@@ -718,6 +761,56 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_export_statement(&mut self) -> ParseResult<Statement> {
+        let export = self.expect(TokenType::Export)?;
+        let decl = self.parse_statement()?;
+
+        match decl.value {
+            StatementKind::Function { .. } | StatementKind::Let { .. } => {}
+            _ => return Err("Can only export declarations".to_string()),
+        }
+
+        Ok(Statement {
+            position: export.position,
+            value: StatementKind::Export(Box::new(decl)),
+        })
+    }
+
+    fn parse_import_statement(&mut self) -> ParseResult<Statement> {
+        let import = self.expect(TokenType::Import)?;
+        let filename = self.parse_expression()?;
+
+        let idx = match filename.value {
+            ExpressionKind::String(idx) => idx,
+            _ => return Err("Import filename must be a string literal".to_string()),
+        };
+
+        self.expect(TokenType::Semicolon)?;
+
+        Ok(Statement {
+            position: import.position,
+            value: StatementKind::Import(self.agent.string_table[idx].clone()),
+        })
+    }
+
+    fn parse_module_statement(&mut self) -> ParseResult<()> {
+        self.expect(TokenType::Module)?;
+        let name = self.parse_expression()?;
+        self.expect(TokenType::Semicolon)?;
+
+        assert_ident(&name)?;
+
+        let name = if let ExpressionKind::Identifier(name) = name.value {
+            name
+        } else {
+            unreachable!();
+        };
+
+        self.module_name = Some(name);
+
+        Ok(())
+    }
+
     fn parse_continue_statement(&mut self) -> ParseResult<Statement> {
         let continue_ = self.expect(TokenType::Continue)?;
         self.expect(TokenType::Semicolon)?;
@@ -785,7 +878,8 @@ impl<'a> Parser<'a> {
             | TokenType::Caret
             | TokenType::And
             | TokenType::LessLess
-            | TokenType::GreaterGreater => self.parse_left_assoc_binary(token, left),
+            | TokenType::GreaterGreater
+            | TokenType::Dot => self.parse_left_assoc_binary(token, left),
             TokenType::Equal | TokenType::StarStar => self.parse_right_assoc_binary(token, left),
             TokenType::LeftParen => self.parse_call_expression(token, left),
             TokenType::LeftBracket => self.parse_index_expression(token, left),
@@ -1760,6 +1854,96 @@ return 1;
                     })),
                 }),
             ],
+        );
+    }
+
+    #[test]
+    fn test_export_statement() {
+        let mut agent = Agent::new();
+        let ident_a = agent.intern_string("a");
+        let input = "export let a = 0; export function a() {} export 123;";
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![
+                Ok(Statement {
+                    position: Position { line: 1, column: 1 },
+                    value: StatementKind::Export(Box::new(Statement {
+                        position: Position { line: 1, column: 8 },
+                        value: StatementKind::Let {
+                            name: Expression {
+                                position: Position {
+                                    line: 1,
+                                    column: 12
+                                },
+                                value: ExpressionKind::Identifier(ident_a),
+                            },
+                            value: Some(Expression {
+                                position: Position {
+                                    line: 1,
+                                    column: 16
+                                },
+                                value: ExpressionKind::Integer(0),
+                            }),
+                        },
+                    })),
+                }),
+                Ok(Statement {
+                    position: Position {
+                        line: 1,
+                        column: 19
+                    },
+                    value: StatementKind::Export(Box::new(Statement {
+                        position: Position {
+                            line: 1,
+                            column: 26
+                        },
+                        value: StatementKind::Function {
+                            name: Expression {
+                                position: Position {
+                                    line: 1,
+                                    column: 35
+                                },
+                                value: ExpressionKind::Identifier(ident_a),
+                            },
+                            parameters: Vec::new(),
+                            body: Vec::new(),
+                        },
+                    })),
+                }),
+                Err("Can only export declarations".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_import_statement() {
+        let mut agent = Agent::new();
+        let input = r#"import "test.rbcvm";"#;
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Ok(Statement {
+                position: Position { line: 1, column: 1 },
+                value: StatementKind::Import("test.rbcvm".to_string())
+            })]
+        );
+    }
+
+    #[test]
+    fn test_import_statement_non_string() {
+        let mut agent = Agent::new();
+        let input = r#"import abc;"#;
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(&mut agent, lexer);
+
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Err("Import filename must be a string literal".to_string())]
         );
     }
 

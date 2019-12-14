@@ -1,8 +1,15 @@
+use crate::agent::Agent;
 use crate::compiler::bytecode::Bytecode;
 use crate::compiler::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
+use crate::module::{Module, ModuleSpec};
 use crate::opcode::OpCode;
 
 pub type CompileResult<T> = Result<T, String>;
+
+pub(crate) enum CompilerOutput {
+    Module { code: Bytecode, spec: ModuleSpec },
+    Script(Bytecode),
+}
 
 enum LoopState {
     While {
@@ -140,26 +147,35 @@ impl<'a> CompilerState<'a> {
     }
 }
 
-pub struct CodeGen {
+pub struct CodeGen<'a> {
     bytecode: Bytecode,
+    agent: &'a mut Agent,
 }
 
-impl CodeGen {
-    pub fn new(bytecode: Bytecode) -> CodeGen {
-        CodeGen { bytecode }
+impl<'a> CodeGen<'a> {
+    pub fn new(agent: &'a mut Agent) -> Self {
+        Self::with_bytecode(agent, Bytecode::new())
     }
 
-    pub fn compile<'a, T>(mut self, statements: T) -> CompileResult<Vec<u8>>
+    pub fn with_bytecode(agent: &'a mut Agent, bytecode: Bytecode) -> Self {
+        Self { agent, bytecode }
+    }
+
+    pub fn compile<'b, T>(mut self, module: ModuleSpec, statements: T) -> CompileResult<Bytecode>
     where
-        T: Iterator<Item = &'a Statement>,
+        T: Iterator<Item = &'b Statement>,
     {
         let mut state = CompilerState::new(true, None);
+
+        self.bytecode.init_module(module.name);
 
         for statement in statements {
             self.compile_statement(&mut state, statement)?;
         }
 
-        Ok(self.bytecode.into())
+        self.bytecode.end_module();
+
+        Ok(self.bytecode)
     }
 
     fn compile_statement(
@@ -177,6 +193,8 @@ impl CodeGen {
             StatementKind::Continue => self.compile_continue_statement(state, statement),
             StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
             StatementKind::Return(_) => self.compile_return_statement(state, statement),
+            StatementKind::Export(_) => self.compile_export_statement(state, statement),
+            StatementKind::Import(_) => unreachable!(), // filtered out by parser
         }
     }
 
@@ -544,6 +562,20 @@ impl CodeGen {
         }
     }
 
+    fn compile_export_statement(
+        &mut self,
+        state: &mut CompilerState,
+        statement: &Statement,
+    ) -> CompileResult<()> {
+        if let StatementKind::Export(stmt) = &statement.value {
+            self.compile_statement(state, stmt)?;
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
     fn compile_expression_statement(
         &mut self,
         state: &mut CompilerState,
@@ -812,6 +844,19 @@ impl CodeGen {
                         _ => unreachable!(),
                     };
                 }
+
+                TokenType::Dot => {
+                    if let ExpressionKind::Identifier(module_name) = left.value {
+                        if let ExpressionKind::Identifier(export_name) = right.value {
+                            self.bytecode.load_from_module(module_name, export_name);
+                        } else {
+                            return Err("Expected export name to be an identifier".to_string());
+                        }
+                    } else {
+                        return Err("Expected module name to be an identifier".to_string());
+                    }
+                }
+
                 _ => unreachable!(),
             }
 
@@ -862,9 +907,8 @@ impl CodeGen {
 mod tests {
     use super::*;
     use crate::agent::Agent;
-    use crate::code_object::CodeObject;
-    use crate::disassemble::disassemble;
-    use crate::parser::{Lexer, Parser};
+    use crate::compiler::disassemble::disassemble;
+    use crate::compiler::parser::{Lexer, Parser};
 
     macro_rules! test_statement {
         ($input:expr, $expected:expr $(,)?) => {{
@@ -880,10 +924,10 @@ mod tests {
                 parser.collect::<Result<Vec<Statement>, String>>()?
             };
 
-            let compiler = Compiler::new();
-            let bytecode = CodeObject::new(compiler.compile(ast.iter())?);
+            let compiler = CodeGen::new(&mut agent);
+            let bytecode = compiler.compile(ast.iter())?.into();
 
-            let expected = CodeObject::new($expected.into::<Vec<_>>());
+            let expected = $expected.into::<Vec<_>>();
 
             println!("Expected:");
             disassemble(&agent, &expected)?;

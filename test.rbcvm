@@ -561,10 +561,5 @@ Pointer :   ^
 "let parsed = bf_parse(prog);
 bf_run(parsed);";
 
-let myarray = da_new();
-
-for let i = 0; i < 10; i = i + 1 {
-  da_push(myarray, i);
-}
-
-println(da_map(myarray));
+module List;
+List.map();

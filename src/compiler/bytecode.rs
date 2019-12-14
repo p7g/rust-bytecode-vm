@@ -233,6 +233,12 @@ impl Bytecode {
         self.op(OpCode::StoreArgument).usize(id)
     }
 
+    pub fn load_from_module(&mut self, module_name: usize, export_name: usize) -> &mut Bytecode {
+        self.op(OpCode::LoadFromModule)
+            .usize(module_name)
+            .usize(export_name)
+    }
+
     pub fn new_array(&mut self, len: usize) -> &mut Bytecode {
         self.op(OpCode::NewArray).usize(len)
     }
@@ -305,6 +311,14 @@ impl Bytecode {
         self.op(OpCode::Neg)
     }
 
+    pub fn init_module(&mut self, name: usize) -> &mut Bytecode {
+        self.op(OpCode::InitModule).usize(name)
+    }
+
+    pub fn end_module(&mut self) -> &mut Bytecode {
+        self.op(OpCode::EndModule)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,
@@ -313,6 +327,10 @@ impl Bytecode {
     }
 }
 
+#[deprecated(
+    since = "0.1.1",
+    note = "Use the Bytecode struct fluid interface instead"
+)]
 macro_rules! bytecode {
     (($builder:expr) add $($tt:tt)*) => {{
         bytecode! {
