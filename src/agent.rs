@@ -1,4 +1,4 @@
-use crate::module::Module;
+use crate::module::ModuleSpec;
 use crate::value::Upvalue;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use std::rc::Rc;
 pub struct Agent {
     pub string_table: Vec<String>,
     pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
-    pub modules: HashMap<usize, Module>,
+    pub modules: HashMap<usize, ModuleSpec>,
 }
 
 impl Agent {

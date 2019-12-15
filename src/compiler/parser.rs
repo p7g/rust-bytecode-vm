@@ -2,6 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 use crate::agent::Agent;
+use crate::module::ModuleSpec;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
@@ -452,7 +453,7 @@ fn assert_ident(ident: &Expression) -> ParseResult<()> {
 }
 
 pub(crate) struct ParsedModule {
-    pub(crate) name: usize,
+    pub(crate) spec: ModuleSpec,
     pub(crate) imports: Vec<String>,
     pub(crate) statements: Vec<Statement>,
 }
@@ -461,7 +462,7 @@ pub struct Parser<'a> {
     agent: &'a mut Agent,
     lexer: Peekable<Lexer<'a>>,
     current_token: Option<Token>,
-    module_name: Option<usize>,
+    module: Option<ModuleSpec>,
     filename: &'a str,
 }
 
@@ -471,7 +472,7 @@ impl<'a> Parser<'a> {
             agent,
             lexer: lexer.peekable(),
             current_token: None,
-            module_name: None,
+            module: None,
             filename,
         }
     }
@@ -508,7 +509,7 @@ impl<'a> Parser<'a> {
             .collect::<ParseResult<Vec<_>>>()?;
 
         Ok(ParsedModule {
-            name: self.module_name.unwrap(),
+            spec: self.module.take().unwrap(),
             imports,
             statements: statements.into_iter().collect::<ParseResult<Vec<_>>>()?,
         })
@@ -783,10 +784,15 @@ impl<'a> Parser<'a> {
         let export = self.expect(TokenType::Export)?;
         let decl = self.parse_statement()?;
 
-        match decl.value {
-            StatementKind::Function { .. } | StatementKind::Let { .. } => {}
+        let name = match &decl.value {
+            StatementKind::Function { name, .. } | StatementKind::Let { name, .. } => &name.value,
             _ => return Err("Can only export declarations".to_string()),
-        }
+        };
+
+        self.module.as_mut().unwrap().add_export(match name {
+            ExpressionKind::Identifier(name) => *name,
+            _ => unreachable!(),
+        });
 
         Ok(Statement {
             position: export.position,
@@ -824,7 +830,7 @@ impl<'a> Parser<'a> {
             unreachable!();
         };
 
-        self.module_name = Some(name);
+        self.module = Some(ModuleSpec::new(name));
 
         Ok(())
     }
@@ -1883,7 +1889,7 @@ return 1;
     fn test_export_statement() {
         let mut agent = Agent::new();
         let ident_a = agent.intern_string("a");
-        let input = "export let a = 0; export function a() {} export 123;";
+        let input = "module Test; export let a = 0; export function a() {} export 123;";
         let lexer = Lexer::new("test", input);
         let parser = Parser::new("test", &mut agent, lexer);
 
@@ -1891,21 +1897,27 @@ return 1;
             parser.collect::<Vec<_>>(),
             vec![
                 Ok(Statement {
-                    position: Position { line: 1, column: 1 },
+                    position: Position {
+                        line: 1,
+                        column: 14
+                    },
                     value: StatementKind::Export(Box::new(Statement {
-                        position: Position { line: 1, column: 8 },
+                        position: Position {
+                            line: 1,
+                            column: 21
+                        },
                         value: StatementKind::Let {
                             name: Expression {
                                 position: Position {
                                     line: 1,
-                                    column: 12
+                                    column: 25
                                 },
                                 value: ExpressionKind::Identifier(ident_a),
                             },
                             value: Some(Expression {
                                 position: Position {
                                     line: 1,
-                                    column: 16
+                                    column: 29,
                                 },
                                 value: ExpressionKind::Integer(0),
                             }),
@@ -1915,18 +1927,18 @@ return 1;
                 Ok(Statement {
                     position: Position {
                         line: 1,
-                        column: 19
+                        column: 32,
                     },
                     value: StatementKind::Export(Box::new(Statement {
                         position: Position {
                             line: 1,
-                            column: 26
+                            column: 39,
                         },
                         value: StatementKind::Function {
                             name: Expression {
                                 position: Position {
                                     line: 1,
-                                    column: 35
+                                    column: 48,
                                 },
                                 value: ExpressionKind::Identifier(ident_a),
                             },

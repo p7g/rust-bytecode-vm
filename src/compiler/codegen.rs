@@ -848,7 +848,15 @@ impl<'a> CodeGen<'a> {
                 TokenType::Dot => {
                     if let ExpressionKind::Identifier(module_name) = left.value {
                         if let ExpressionKind::Identifier(export_name) = right.value {
-                            self.bytecode.load_from_module(module_name, export_name);
+                            if self.agent.modules[&module_name].has_export(export_name) {
+                                self.bytecode.load_from_module(module_name, export_name);
+                            } else {
+                                return Err(format!(
+                                    "Module {} has no export {}",
+                                    self.agent.string_table[module_name],
+                                    self.agent.string_table[export_name]
+                                ));
+                            }
                         } else {
                             return Err("Expected export name to be an identifier".to_string());
                         }

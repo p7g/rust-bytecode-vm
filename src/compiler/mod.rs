@@ -11,7 +11,6 @@ use std::fs;
 use std::path::Path;
 
 use crate::agent::Agent;
-use crate::module::ModuleSpec;
 
 use bytecode::Bytecode;
 
@@ -77,12 +76,13 @@ impl<'a> Compiler<'a> {
             self.compile_file(pwd.clone(), import)?;
         }
 
+        self.agent
+            .modules
+            .insert(parsed_module.spec.name, parsed_module.spec.clone());
         let gen = codegen::CodeGen::with_bytecode(self.agent, self.bytecode.take().unwrap());
 
-        self.bytecode.replace(gen.compile(
-            ModuleSpec::new(parsed_module.name),
-            parsed_module.statements.iter(),
-        )?);
+        self.bytecode
+            .replace(gen.compile(parsed_module.spec, parsed_module.statements.iter())?);
 
         Ok(())
     }

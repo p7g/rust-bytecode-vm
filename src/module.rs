@@ -2,7 +2,7 @@ use crate::agent::Agent;
 use crate::value::Value;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleSpec {
     pub name: usize,
     exports: HashSet<usize>,
@@ -18,6 +18,10 @@ impl ModuleSpec {
 
     pub fn add_export(&mut self, name: usize) {
         self.exports.insert(name);
+    }
+
+    pub fn has_export(&self, name: usize) -> bool {
+        self.exports.contains(&name)
     }
 }
 

@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::agent::Agent;
 use crate::compiler::disassemble::disassemble;
-use crate::module::{Module, ModuleSpec};
+use crate::module::Module;
 use crate::opcode::OpCode;
 use crate::value::{FunctionValue, Upvalue, Value};
 
@@ -26,6 +26,7 @@ macro_rules! print_stack {
 pub struct Interpreter<'a> {
     pub agent: &'a mut Agent,
     intrinsics: HashMap<usize, Value>,
+    modules: HashMap<usize, Module>,
     current_module: Option<Module>,
     call_stack: Vec<usize>,
     stack: Vec<Value>,
@@ -46,6 +47,7 @@ impl<'a> Interpreter<'a> {
         Interpreter {
             agent,
             intrinsics,
+            modules: HashMap::new(),
             current_module: None,
             call_stack: Vec::new(),
             stack: Vec::new(),
@@ -177,7 +179,7 @@ impl<'a> Interpreter<'a> {
                     && *self.call_stack.last().unwrap()
                         != self.current_module.as_ref().unwrap().name()
                 {
-                    self.agent.modules.get_mut(self.call_stack.last().unwrap())
+                    self.modules.get_mut(self.call_stack.last().unwrap())
                 } else {
                     self.current_module.as_mut()
                 }
@@ -327,11 +329,6 @@ impl<'a> Interpreter<'a> {
                                 let args = pop_and_get!(num_args);
                                 let result = function(self, args);
                                 push!(result);
-                                if let Some(name) = name {
-                                    if &self.agent.string_table[*name] == "include" {
-                                        println!("{:#?}", self.agent.modules);
-                                    }
-                                }
                             }
                             FunctionValue::User {
                                 arity,
@@ -578,7 +575,6 @@ impl<'a> Interpreter<'a> {
                     let export_name = usize::from_le_bytes(next!(8));
 
                     push!(self
-                        .agent
                         .modules
                         .get(&module_name)
                         .ok_or_else(|| format!(
@@ -789,8 +785,10 @@ impl<'a> Interpreter<'a> {
                     let name = usize::from_le_bytes(next!(8));
 
                     debug_assert!(self.current_module.is_none());
-                    self.current_module =
-                        Some(Module::new(ModuleSpec::new(name), self.intrinsics.clone()));
+                    self.current_module = Some(Module::new(
+                        self.agent.modules[&name].clone(),
+                        self.intrinsics.clone(),
+                    ));
                 }
 
                 OpCode::EndModule => {
@@ -798,7 +796,7 @@ impl<'a> Interpreter<'a> {
                     debug_assert!(module.is_some());
 
                     let module = module.unwrap();
-                    self.agent.modules.insert(module.name(), module);
+                    self.modules.insert(module.name(), module);
                 }
 
                 OpCode::Dup => {
@@ -820,11 +818,24 @@ impl<'a> Interpreter<'a> {
 mod tests {
     use super::*;
     use crate::compiler::bytecode::Bytecode;
+    use crate::module::ModuleSpec;
     use pretty_assertions::assert_eq;
+
+    macro_rules! get_agent {
+        () => {{
+            let mut agent = Agent::new();
+            let name = agent.intern_string("test");
+            let spec = ModuleSpec::new(name);
+
+            agent.modules.insert(name, spec);
+
+            agent
+        }};
+    }
 
     #[test]
     fn test_halt() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -836,7 +847,7 @@ mod tests {
 
     #[test]
     fn test_const_int() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -850,7 +861,7 @@ mod tests {
 
     #[test]
     fn test_const_double() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -864,7 +875,7 @@ mod tests {
 
     #[test]
     fn test_const_true() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -876,7 +887,7 @@ mod tests {
 
     #[test]
     fn test_const_false() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -888,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_const_null() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -900,7 +911,7 @@ mod tests {
 
     #[test]
     fn test_const_string() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -917,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -936,7 +947,7 @@ mod tests {
 
     #[test]
     fn test_sub() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -955,7 +966,7 @@ mod tests {
 
     #[test]
     fn test_mul() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -974,7 +985,7 @@ mod tests {
 
     #[test]
     fn test_div() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -993,7 +1004,7 @@ mod tests {
 
     #[test]
     fn test_mod() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -1012,7 +1023,7 @@ mod tests {
 
     #[test]
     fn test_exp() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -1031,7 +1042,7 @@ mod tests {
 
     #[test]
     fn test_jump() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
@@ -1057,7 +1068,7 @@ mod tests {
 
     #[test]
     fn test_jump_if_true() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1088,7 +1099,7 @@ mod tests {
 
     #[test]
     fn test_jump_if_false() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1118,7 +1129,7 @@ mod tests {
 
     #[test]
     fn test_user_function() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let name = agent.intern_string("ret123");
         let ret123 = Value::from(FunctionValue::User {
@@ -1154,7 +1165,7 @@ mod tests {
 
     #[test]
     fn test_pop() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).const_int(123).pop().end_module();
@@ -1168,7 +1179,7 @@ mod tests {
 
     #[test]
     fn test_load_local() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1187,7 +1198,7 @@ mod tests {
 
     #[test]
     fn test_store_local() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1208,7 +1219,7 @@ mod tests {
 
     #[test]
     fn test_load_global() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut global = HashMap::new();
 
         global.insert(agent.intern_string("test"), Value::from("test"));
@@ -1228,7 +1239,7 @@ mod tests {
 
     #[test]
     fn test_declare_global() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let ident_hello = agent.intern_string("hello");
 
         let mut bytecode = Bytecode::new();
@@ -1246,7 +1257,7 @@ mod tests {
 
     #[test]
     fn test_store_global() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
         let mut global = HashMap::new();
 
         global.insert(agent.intern_string("test"), Value::from(3));
@@ -1268,7 +1279,7 @@ mod tests {
 
     #[test]
     fn test_new_function() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1294,7 +1305,7 @@ mod tests {
 
     #[test]
     fn test_bind_local() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1322,7 +1333,7 @@ mod tests {
 
     #[test]
     fn test_bind_upvalue() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1357,7 +1368,7 @@ mod tests {
 
     #[test]
     fn test_bind_argument() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1391,7 +1402,7 @@ mod tests {
 
     #[test]
     fn test_load_upvalue() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1419,7 +1430,7 @@ mod tests {
 
     #[test]
     fn test_store_upvalue() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let a = agent.intern_string("a");
         let b = agent.intern_string("b");
@@ -1483,7 +1494,7 @@ mod tests {
 
     #[test]
     fn test_load_argument() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1510,7 +1521,7 @@ mod tests {
 
     #[test]
     fn test_store_argument() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1541,7 +1552,7 @@ mod tests {
 
     #[test]
     fn test_new_array() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).new_array(10).end_module();
@@ -1555,7 +1566,7 @@ mod tests {
 
     #[test]
     fn test_array_get() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let array = agent.intern_string("array");
 
@@ -1579,7 +1590,7 @@ mod tests {
 
     #[test]
     fn test_array_set() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let array = agent.intern_string("array");
 
@@ -1609,7 +1620,7 @@ mod tests {
 
     #[test]
     fn test_equal() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1635,7 +1646,7 @@ mod tests {
 
     #[test]
     fn test_not_equal() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1661,7 +1672,7 @@ mod tests {
 
     #[test]
     fn test_less_than() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1694,7 +1705,7 @@ mod tests {
 
     #[test]
     fn test_less_than_equal() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1727,7 +1738,7 @@ mod tests {
 
     #[test]
     fn test_greater_than() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1760,7 +1771,7 @@ mod tests {
 
     #[test]
     fn test_greater_than_equal() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1793,7 +1804,7 @@ mod tests {
 
     #[test]
     fn test_bitwise_and() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1830,7 +1841,7 @@ mod tests {
 
     #[test]
     fn test_bitwise_or() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1867,7 +1878,7 @@ mod tests {
 
     #[test]
     fn test_bitwise_xor() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1904,7 +1915,7 @@ mod tests {
 
     #[test]
     fn test_bitwise_not() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1922,7 +1933,7 @@ mod tests {
 
     #[test]
     fn test_not() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).const_true().not().end_module();
@@ -1936,7 +1947,7 @@ mod tests {
 
     #[test]
     fn test_shift_left() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
@@ -1955,7 +1966,7 @@ mod tests {
 
     #[test]
     fn test_shift_right() {
-        let mut agent = Agent::new();
+        let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
         bytecode
