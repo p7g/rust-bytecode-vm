@@ -1,0 +1,3 @@
+**/*.rbcvm linguist-language=JavaScript
+
+.hooks/autohook.sh linguist-vendored
