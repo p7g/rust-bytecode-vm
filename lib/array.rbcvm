@@ -1,0 +1,46 @@
+module Array;
+
+export function new(length) {
+  return array_new(length);
+}
+
+export function length(self) {
+  return array_length(self);
+}
+
+export function find(self, func) {
+  let len = length(self);
+
+  for let i = 0; i < len; i = i + 1 {
+    if func(self[i], i, self) {
+      return self[i];
+    }
+  }
+
+  return null;
+}
+
+export function foreach(self, func) {
+  let len = length(self);
+
+  for let i = 0; i < len; i = i + 1 {
+    func(self[i], i, self);
+  }
+}
+
+export function contains(self, thing) {
+  return null != find(self, function(i) {
+    return i == thing;
+  });
+}
+
+export function map(self, func) {
+  let len = length(self);
+  let new_array = new(len);
+
+  for let i = 0; i < len; i = i + 1 {
+    new_array[i] = func(self[i], i, self);
+  }
+
+  return new_array;
+}

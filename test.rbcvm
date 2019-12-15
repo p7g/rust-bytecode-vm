@@ -1,411 +1,19 @@
-function box(value) {
-    return [value];
-}
-
-function box_set(box, new_value) {
-    box[0] = new_value;
-}
-
-function box_get(box) {
-    return box[0];
-}
-
-function array_find(array, func) {
-    let len = array_length(array);
-    for let i = 0; i < len; i = i + 1 {
-        if func(array[i], i, array) {
-            return array[i];
-        }
-    }
-    return null;
-}
-
-function array_foreach(array, func) {
-    let len = array_length(array);
-    for let i = 0; i < len; i = i + 1 {
-        func(array[i], i, array);
-    }
-}
-
-function array_contains(array, thing) {
-    return null != array_find(array, function(i) {
-        return i == thing;
-    });
-}
-
-function array_map(array, func) {
-    let len = array_length(array);
-    let new_array = array_new(length);
-
-    for let i = 0; i < len; i = i + 1 {
-        new_array[i] = func(array[i], i, array);
-    }
-
-    return new_array;
-}
-
-function ll_new() {
-    return box(null);
-}
-
-function ll_length(list) {
-    let current = box_get(list);
-    let len = 0;
-
-    while current {
-        len = len + 1;
-        current = current[1];
-    }
-
-    return len;
-}
-
-function ll_prepend(list, value) {
-    let current = box_get(list);
-    box_set(list, [value, current]);
-}
-
-function ll_append(list, value) {
-    let current = box_get(list);
-    let prev = null;
-    if current == null {
-        box_set(list, [value, null]);
-        return;
-    }
-
-    while current {
-        prev = current;
-        current = current[1];
-    }
-
-    prev[1] = [value, null];
-}
-
-function ll_foreach(list, fn) {
-    let current = box_get(list);
-
-    let i = 0;
-    while current {
-        fn(current[0], i);
-        current = current[1];
-        i = i + 1;
-    }
-}
-
-function ll_find(list, fn) {
-    let current = box_get(list);
-
-    while current {
-        if fn(current[0]) {
-            return current;
-        }
-    }
-
-    return null;
-}
-
-function ll_reverse(list) {
-    let new_list = ll_new();
-    ll_foreach(list, function(i) {
-        ll_prepend(new_list, i);
-    });
-    return new_list;
-}
-
-function ll_map(list, func) {
-    let new_list = ll_new();
-
-    ll_foreach(list, function(val, i) {
-        ll_append(new_list, func(val, i, list));
-    });
-
-    return new_list;
-}
-
-function ll_to_array(list) {
-    let arr = array_new(ll_length(list));
-    ll_foreach(list, function(elem, i) {
-        arr[i] = elem;
-    });
-    return arr;
-}
-
-let DA_INITIAL_SIZE = 16;
-
-function da_with_cap(cap) {
-    return [0, array_new(cap)];
-}
-
-function da_new() {
-    return da_with_cap(DA_INITIAL_SIZE);
-}
-
-function da_push(dynarray, value) {
-    let next_idx = dynarray[0];
-    let array = dynarray[1];
-    let len = array_length(array);
-    if next_idx >= len {
-        let new_array = array_new(2 * len);
-        for let i = 0; i < next_idx; i = i + 1 {
-            new_array[i] = array[i];
-        }
-        dynarray[1] = array = new_array;
-    }
-    array[next_idx] = value;
-    dynarray[0] = next_idx + 1;
-}
-
-function da_pop(dynarray) {
-    if dynarray[0] <= 0 {
-        return null;
-    }
-    dynarray[0] = dynarray[0] - 1;
-    return dynarray[1][dynarray[0]];
-}
-
-function da_foreach(dynarray, func) {
-    let next_idx = dynarray[0];
-    let array = dynarray[1];
-
-    for let i = 0; i < next_idx; i = i + 1 {
-        func(array[i], i, array);
-    }
-}
-
-function da_indexof(dynarray, func) {
-    let next_idx = dynarray[0];
-    let array = dynarray[1];
-
-    for let i = 0; i < next_idx; i = i + 1 {
-        if func(array[i], i, array) {
-            return i;
-        }
-    }
-
-    return -1;
-}
-
-function da_map(self, func) {
-    let len = da_length(self);
-    let new_array = da_with_cap(len);
-
-    for let i = 0; i < len; i = i + 1 {
-        da_set(new_array, i, func(da_get(self, i), i, self));
-    }
-
-    return new_array;
-}
-
-function da_find(dynarray, func) {
-    let idx = da_indexof(dynarray, func);
-    if idx >= 0 {
-        return da_get(dynarray, idx);
-    }
-    return null;
-}
-
-function da_set(dynarray, n, value) {
-    dynarray[1][n] = value;
-}
-
-function da_get(dynarray, n) {
-    return dynarray[1][n];
-}
-
-function da_length(dynarray) {
-    return dynarray[0];
-}
-
-function da_to_array(dynarray) {
-    let len = dynarray[0];
-    let array = array_new(len);
-    for let i = 0; i < len; i = i + 1 {
-        array[i] = dynarray[1][i];
-    }
-    return array;
-}
-
-function alist_new() {
-    return da_new();
-}
-
-function alist_set(list, key, value) {
-    let found = da_find(list, function(x, i) {
-        if x[0] == key {
-            return true;
-        }
-    });
-
-    if found == null {
-        da_push(list, [key, value]);
-    } else {
-        found[1] = value;
-    }
-}
-
-function alist_get(list, key) {
-    let found = da_find(list, function(x) {
-        if x[0] == key {
-            return true;
-        }
-    });
-
-    if found != null {
-        return found[1];
-    }
-    return null;
-}
-
-let FNV_OFFSET_BASIS_32 = 2166136261;
-let FNV_PRIME_32 = 16777619;
-
-function fnv1a(bytes) {
-    let len = array_length(bytes);
-    let hash = FNV_OFFSET_BASIS_32;
-
-    for let i = 0; i < len; i = i + 1 {
-        hash = hash ^ bytes[i];
-        hash = hash * FNV_PRIME_32;
-    }
-
-    return hash;
-}
-
-function to_bytes(v) {
-    let t = typeof(v);
-    if t == "string" {
-        return string_bytes(v);
-    }
-    if t == "integer" {
-        return [v];
-    }
-}
-
-let HM_INITIAL_CAPACITY = 2 ** 3;
-let HM_LOAD_FACTOR = 0.7;
-
-let HM_CAP = 0;
-let HM_LOAD = 1;
-let HM_FUNC = 2;
-let HM_BUCKETS = 3;
-
-function hm_new(func) {
-    return [
-        HM_INITIAL_CAPACITY,
-        0,
-        func,
-        array_new(HM_INITIAL_CAPACITY),
-    ];
-}
-
-function hm_string() {
-    return hm_new(function(key) {
-        return fnv1a(string_bytes(key));
-    });
-}
-
-function hm_integer() {
-    return hm_new(function(key) {
-        return fnv1a([key]);
-    });
-}
-
-function hm_hash(hm, key) {
-    return hm[HM_FUNC](key) & hm[HM_CAP] - 1;
-}
-
-function hm_grow(hm) {
-    hm[HM_CAP] = hm[HM_CAP] * 2;
-    let oldbuckets = hm[HM_BUCKETS];
-    hm[HM_BUCKETS] = array_new(hm[HM_CAP]);
-    hm[HM_LOAD] = 0;
-    let len = array_length(oldbuckets);
-
-    let bucket;
-    for let i = 0; i < len; i = i + 1 {
-        bucket = oldbuckets[i];
-        da_foreach(bucket, function(entry) {
-            hm_set(hm, entry[0], entry[1]);
-        });
-    }
-}
-
-function hm_get(hm, key) {
-    let hashed = hm_hash(hm, key);
-    let bucket = hm[HM_BUCKETS][hashed];
-
-    if bucket == null {
-        return null;
-    }
-
-    let entry = da_find(bucket, function(entry) {
-        return entry[0] == key;
-    });
-
-    if entry == null {
-        return null;
-    }
-    return entry[1];
-}
-
-function hm_set(hm, key, value) {
-    let hashed = hm_hash(hm, key);
-    let bucket = hm[HM_BUCKETS][hashed];
-
-    if bucket == null {
-        bucket = da_new();
-        hm[HM_LOAD] = hm[HM_LOAD] + 1;
-        hm[HM_BUCKETS][hashed] = bucket;
-    }
-
-    let entry = da_find(bucket, function(entry) {
-        return entry[0] == key;
-    });
-
-    if entry {
-        entry[1] = value;
-        return;
-    }
-
-    da_push(bucket, [key, value]);
-    if hm[HM_LOAD] / hm[HM_CAP] < HM_LOAD_FACTOR {
-        hm_grow(hm);
-    }
-}
-
-function hm_delete(hm, key) {
-    let hashed = hm_hash(hm, key);
-    let bucket = hm[HM_BUCKETS][hashed];
-    if !bucket {
-        return false;
-    }
-
-    let len = da_length(bucket);
-    let idx = da_indexof(bucket, function(entry) {
-        return entry[0] == key;
-    });
-
-    if i != -1 {
-        for let i = idx + 1; i < len; i = i + 1 {
-            bucket[i - 1] = bucket[i];
-        }
-        if da_length(bucket) == 0 {
-            hm[HM_BUCKETS][hashed] = null;
-            hm[HM_LOAD] = hm[HM_LOAD] - 1;
-        }
-        return true;
-    }
-    return false;
-}
+module Test;
+
+import "lib/array.rbcvm";
+import "lib/arraylist.rbcvm";
+import "lib/hash.rbcvm";
+import "lib/hashmap.rbcvm";
+import "lib/string.rbcvm";
 
 function tape_new() {
-    let arr = da_new();
-    da_push(arr, 0);
+    let arr = ArrayList.new();
+    ArrayList.push(arr, 0);
     return [0, arr];
 }
 
 function tape_get(tape) {
-    return da_get(tape[1], tape[0]);
+    return ArrayList.get(tape[1], tape[0]);
 }
 
 function tape_get_char(tape) {
@@ -415,19 +23,19 @@ function tape_get_char(tape) {
 function tape_inc(tape) {
     let reel = tape[1];
     let idx = tape[0];
-    da_set(reel, idx, 1 + da_get(reel, idx));
+    ArrayList.set(reel, idx, 1 + ArrayList.get(reel, idx));
 }
 
 function tape_dec(tape) {
     let reel = tape[1];
     let idx = tape[0];
-    da_set(reel, idx, da_get(reel, idx) - 1);
+    ArrayList.set(reel, idx, ArrayList.get(reel, idx) - 1);
 }
 
 function tape_advance(tape) {
     tape[0] = tape[0] + 1;
-    if da_length(tape[1]) <= tape[0] {
-        da_push(tape[1], 0);
+    if ArrayList.length(tape[1]) <= tape[0] {
+        ArrayList.push(tape[1], 0);
     }
 }
 
@@ -437,44 +45,49 @@ function tape_devance(tape) {
     }
 }
 
+function hash_int(key) {
+  return Hash.fnv1a([key]);
+}
+
 function bf_parse(program) {
-    let code = da_new();
-    let bracket_map = hm_integer();
-    let left_stack = da_new();
+    let code = ArrayList.new();
+    let bracket_map = HashMap.new();
+    HashMap.set_hash_function(bracket_map, hash_int);
+    let left_stack = ArrayList.new();
     let pc = 0;
 
-    let chars = string_chars(program);
-    let len = array_length(chars);
+    let chars = String.chars(program);
+    let len = Array.length(chars);
     let c;
     let left;
     for let i = 0; i < len; i = i + 1 {
         c = chars[i];
 
         if c == "[" {
-            da_push(left_stack, pc);
+            ArrayList.push(left_stack, pc);
         } else if c == "]" {
-            left = da_pop(left_stack);
+            left = ArrayList.pop(left_stack);
             if left != null {
-                hm_set(bracket_map, left, pc);
-                hm_set(bracket_map, pc, left);
+                HashMap.set(bracket_map, left, pc);
+                HashMap.set(bracket_map, pc, left);
             }
-        } else if array_contains(string_chars("+-.,<>"), c) {
+        } else if Array.contains(String.chars("+-.,<>"), c) {
         } else {
             continue;
         }
 
-        da_push(code, c);
+        ArrayList.push(code, c);
         pc = pc + 1;
     }
 
-    return [da_to_array(code), bracket_map];
+    return [ArrayList.to_array(code), bracket_map];
 }
 
 function bf_run(program) {
     let code = program[0];
     let bracket_map = program[1];
     let tape = tape_new();
-    let len = array_length(code);
+    let len = Array.length(code);
     let pc = 0;
 
     let op;
@@ -490,16 +103,19 @@ function bf_run(program) {
             tape_devance(tape);
         } else if op == "[" {
             if tape_get(tape) == 0 {
-                pc = hm_get(bracket_map, pc);
+                pc = HashMap.get(bracket_map, pc);
             }
         } else if op == "]" {
             if tape_get(tape) != 0 {
-                pc = hm_get(bracket_map, pc);
+                pc = HashMap.get(bracket_map, pc);
             }
         } else if op == "." {
             print(tape_get_char(tape));
         }
 
+        if pc == null {
+          println("pc is null!!!!");
+        }
         pc = pc + 1;
     }
 }
@@ -558,8 +174,5 @@ Pointer :   ^
 >++.                    And finally a newline from Cell #6
 ";
 
-"let parsed = bf_parse(prog);
-bf_run(parsed);";
-
-module List;
-List.map();
+let parsed = bf_parse(prog);
+bf_run(parsed);

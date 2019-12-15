@@ -1,0 +1,9 @@
+module String;
+
+export function chars(str) {
+  return string_chars(str);
+}
+
+export function bytes(str) {
+  return string_bytes(str);
+}
