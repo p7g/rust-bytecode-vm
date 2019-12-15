@@ -75,6 +75,7 @@ pub enum FunctionValue {
         name: Option<usize>,
         arity: usize,
         address: usize,
+        module: usize,
         upvalues: Vec<Rc<RefCell<Upvalue>>>,
     },
 }
@@ -95,11 +96,12 @@ impl std::fmt::Debug for FunctionValue {
                 name,
                 arity,
                 address,
+                module,
                 ..
             } => write!(
                 f,
-                "FunctionValue::User(name: {:?}, arity: {:?}, address: {:?})",
-                name, arity, address,
+                "FunctionValue::User(name: {:?}, arity: {:?}, address: {:?}, module: {})",
+                name, arity, address, module
             ),
         }
     }
@@ -132,18 +134,21 @@ impl PartialEq for FunctionValue {
                 arity,
                 address,
                 upvalues,
+                module,
             } => {
                 if let FunctionValue::User {
                     name: other_name,
                     arity: other_arity,
                     address: other_address,
                     upvalues: other_upvalues,
+                    module: other_module,
                 } = other
                 {
                     name == other_name
                         && arity == other_arity
                         && address == other_address
                         && upvalues == other_upvalues
+                        && module == other_module
                 } else {
                     false
                 }
@@ -398,12 +403,14 @@ mod tests {
             name: Some(123),
             arity: 1,
             address: 123,
+            module: 0,
             upvalues: Vec::new(),
         };
         let d = FunctionValue::User {
             name: Some(123),
             arity: 1,
             address: 123,
+            module: 0,
             upvalues: Vec::new(),
         };
 

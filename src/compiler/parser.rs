@@ -89,8 +89,8 @@ impl Token {
         }
     }
 
-    pub fn lbp(&self) -> usize {
-        match self.typ {
+    pub fn lbp(&self) -> Result<usize, String> {
+        Ok(match self.typ {
             TokenType::Identifier => 0,
             TokenType::Integer => 0,
             TokenType::Double => 0,
@@ -127,8 +127,8 @@ impl Token {
             TokenType::LeftBrace => 0,
             TokenType::Comma => 0,
 
-            _ => panic!("Trying to get lbp of {:?}", self),
-        }
+            _ => return Err(format!("Trying to get lbp of {:?}", self)),
+        })
     }
 
     pub fn rbp(&self) -> usize {
@@ -150,17 +150,23 @@ pub struct Lexer<'a> {
     column: usize,
     input: &'a str,
     chars: Peekable<Chars<'a>>,
+    pub(crate) filename: &'a str,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str) -> Lexer<'a> {
+    pub fn new(filename: &'a str, input: &'a str) -> Lexer<'a> {
         Lexer {
             position: 0,
             line: 1,
             column: 1,
             input,
             chars: input.chars().peekable(),
+            filename,
         }
+    }
+
+    fn error(&self, msg: String) -> String {
+        format!("Error in {}: {}", self.filename, msg)
     }
 
     fn next_char(&mut self) -> Option<char> {
@@ -194,7 +200,7 @@ impl<'a> Lexer<'a> {
 
         macro_rules! error {
             ($message:expr $(, $stuff:expr)* $(,)?) => {
-                Some(Err(format!($message, $($stuff)*)))
+                Some(Err(self.error(format!($message, $($stuff)*))))
             };
         }
 
@@ -225,12 +231,15 @@ impl<'a> Lexer<'a> {
                 }
 
                 '#' => {
+                    let mut len = 1;
                     while let Some(c) = self.next_char() {
+                        len += 1;
                         if c == '\n' {
                             break;
                         }
                     }
-                    start += 1;
+                    self.line += 1;
+                    start += len;
                 }
 
                 '+' => token!(TokenType::Plus),
@@ -453,15 +462,17 @@ pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     current_token: Option<Token>,
     module_name: Option<usize>,
+    filename: &'a str,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(agent: &'a mut Agent, lexer: Lexer<'a>) -> Parser<'a> {
+    pub fn new(filename: &'a str, agent: &'a mut Agent, lexer: Lexer<'a>) -> Parser<'a> {
         Parser {
             agent,
             lexer: lexer.peekable(),
             current_token: None,
             module_name: None,
+            filename,
         }
     }
 
@@ -489,7 +500,7 @@ impl<'a> Parser<'a> {
                         unreachable!();
                     }
                 } else if let Err(e) = i {
-                    Err(e)
+                    self.error(e)
                 } else {
                     unreachable!();
                 }
@@ -503,10 +514,14 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn error<T>(&self, msg: String) -> ParseResult<T> {
+        Err(format!("Error in {}: {}", self.filename, msg))
+    }
+
     pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
         match self.peek() {
             Ok(Some(_)) => Some(self.parse_statement()),
-            Err(msg) => Some(Err(msg.clone())),
+            Err(msg) => Some(self.error(msg.clone())),
             Ok(None) => None,
         }
     }
@@ -528,18 +543,18 @@ impl<'a> Parser<'a> {
     fn expect(&mut self, expected: TokenType) -> ParseResult<Token> {
         match &self.next_token()? {
             Some(tok) if tok.typ == expected => Ok(tok.clone()),
-            Some(Token { typ, position, .. }) => Err(format!(
+            Some(Token { typ, position, .. }) => self.error(format!(
                 "Expected {:?}, got {:?} at {}",
                 expected, typ, position
             )),
-            None => Err(format!("Expected {:?}, found end of input", expected)),
+            None => self.error(format!("Expected {:?}, found end of input", expected)),
         }
     }
 
     fn peek(&mut self) -> ParseResult<Option<&Token>> {
         match self.lexer.peek() {
             Some(&Ok(ref tok)) => Ok(Some(tok)),
-            Some(Err(msg)) => Err(msg.clone()),
+            Some(Err(msg)) => Err(format!("Error in {}: {}", self.filename, msg.clone())),
             None => Ok(None),
         }
     }
@@ -556,7 +571,7 @@ impl<'a> Parser<'a> {
 
     fn parse_statement(&mut self) -> ParseResult<Statement> {
         loop {
-            return if let Some(token) = self.peek()? {
+            return match if let Some(token) = self.peek()? {
                 match token.typ {
                     TokenType::Let => self.parse_let_declaration(),
                     TokenType::Function => self.parse_function_declaration(),
@@ -576,6 +591,9 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 unreachable!();
+            } {
+                Ok(s) => Ok(s),
+                Err(msg) => self.error(msg),
             };
         }
     }
@@ -767,7 +785,7 @@ impl<'a> Parser<'a> {
 
         match decl.value {
             StatementKind::Function { .. } | StatementKind::Let { .. } => {}
-            _ => return Err("Can only export declarations".to_string()),
+            _ => return self.error("Can only export declarations".to_string()),
         }
 
         Ok(Statement {
@@ -782,7 +800,7 @@ impl<'a> Parser<'a> {
 
         let idx = match filename.value {
             ExpressionKind::String(idx) => idx,
-            _ => return Err("Import filename must be a string literal".to_string()),
+            _ => return self.error("Import filename must be a string literal".to_string()),
         };
 
         self.expect(TokenType::Semicolon)?;
@@ -854,7 +872,7 @@ impl<'a> Parser<'a> {
             }
             TokenType::Function => self.parse_function_expression(token),
 
-            _ => Err(format!(
+            _ => self.error(format!(
                 "Unexpected token {:?} at {}",
                 token.typ, token.position
             )),
@@ -884,7 +902,7 @@ impl<'a> Parser<'a> {
             TokenType::LeftParen => self.parse_call_expression(token, left),
             TokenType::LeftBracket => self.parse_index_expression(token, left),
 
-            _ => Err(format!(
+            _ => self.error(format!(
                 "Unexpected token {:?} at {}",
                 token.typ, token.position
             )),
@@ -906,7 +924,7 @@ impl<'a> Parser<'a> {
         let mut left = self.nud(t)?;
         let mut token = self.peek()?.cloned();
 
-        while token.is_some() && rbp < token.unwrap().lbp() {
+        while token.is_some() && rbp < token.unwrap().lbp()? {
             t = some!(self.next_token()?);
             left = self.led(t, left)?;
             token = self.peek()?.cloned();
@@ -1002,7 +1020,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_left_assoc_binary(&mut self, op: Token, left: Expression) -> ParseResult<Expression> {
-        let right = self.parse_expression_inner(op.lbp())?;
+        let right = self.parse_expression_inner(op.lbp()?)?;
 
         Ok(Expression {
             position: left.position,
@@ -1011,7 +1029,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_right_assoc_binary(&mut self, op: Token, left: Expression) -> ParseResult<Expression> {
-        let right = self.parse_expression_inner(op.lbp() - 1)?;
+        let right = self.parse_expression_inner(op.lbp()? - 1)?;
 
         Ok(Expression {
             position: left.position,
@@ -1091,7 +1109,7 @@ mod tests {
     #[test]
     fn test_lexer_symbols() {
         let input = "[ ] { } ( ) + - * ** / & && | || ^ % ; < > <= >= = == ! != ,";
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1130,7 +1148,7 @@ mod tests {
     #[test]
     fn test_integer() {
         let input = "123";
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1141,7 +1159,7 @@ mod tests {
     #[test]
     fn test_double() {
         let input = "1.23";
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1162,7 +1180,7 @@ for
 let
 function
 ";
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1183,7 +1201,7 @@ function
     #[test]
     fn test_string() {
         let input = r#""this is a string""#;
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1194,7 +1212,7 @@ function
     #[test]
     fn test_string_escapes() {
         let input = r#""so I says, \"this\nis\tan escaped string\"""#;
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer.filter_map(|a| a.ok()).collect::<Vec<_>>(),
@@ -1216,7 +1234,7 @@ function
 
             print(testing());
         "#;
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer
@@ -1246,7 +1264,7 @@ function
     #[test]
     fn test_lexer_iterator() {
         let input = "test 1 1.2";
-        let lexer = Lexer::new(input);
+        let lexer = Lexer::new("test", input);
 
         assert_eq!(
             lexer
@@ -1266,8 +1284,8 @@ function
         let name = agent.intern_string("something");
         let someident = agent.intern_string("someident");
         let input = "let something = someident;";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1304,8 +1322,8 @@ function test(a, b, c) {
     let hello = b;
 }
 ";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.filter_map(|s| s.ok()).collect::<Vec<_>>(),
@@ -1381,8 +1399,8 @@ function test(
         let ident_has = agent.intern_string("has");
         let ident_many = agent.intern_string("many");
         let ident_parameters = agent.intern_string("parameters");
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1428,8 +1446,8 @@ function test(
     fn test_missing_semicolon() {
         let mut agent = Agent::new();
         let input = "let something = someident";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1441,8 +1459,8 @@ function test(
     fn test_keyword_as_identifier() {
         let mut agent = Agent::new();
         let input = "let while = ok;";
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let mut parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.next().unwrap(),
@@ -1460,8 +1478,8 @@ if truee {
 ";
         let ident_true = agent.intern_string("truee");
         let ident_test = agent.intern_string("test");
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1500,8 +1518,8 @@ if truee {
 ";
         let ident_true = agent.intern_string("truee");
         let ident_test = agent.intern_string("test");
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1553,8 +1571,8 @@ if truee {
 ";
         let ident_true = agent.intern_string("truee");
         let ident_test = agent.intern_string("test");
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1611,8 +1629,8 @@ if truee {
     fn test_while_statement() {
         let mut agent = Agent::new();
         let input = "while 1 { if 2 {} }";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1658,8 +1676,8 @@ for let a;; a {}
 for let a; a; a {}
 ";
         let ident_a = agent.intern_string("a");
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1801,8 +1819,8 @@ for let a; a; a {}
     fn test_continue_statement() {
         let mut agent = Agent::new();
         let input = "continue;";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1817,8 +1835,8 @@ for let a; a; a {}
     fn test_break_statement() {
         let mut agent = Agent::new();
         let input = "break;";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1836,8 +1854,8 @@ for let a; a; a {}
 return;
 return 1;
 ";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1862,8 +1880,8 @@ return 1;
         let mut agent = Agent::new();
         let ident_a = agent.intern_string("a");
         let input = "export let a = 0; export function a() {} export 123;";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1922,8 +1940,8 @@ return 1;
     fn test_import_statement() {
         let mut agent = Agent::new();
         let input = r#"import "test.rbcvm";"#;
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1938,8 +1956,8 @@ return 1;
     fn test_import_statement_non_string() {
         let mut agent = Agent::new();
         let input = r#"import abc;"#;
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1951,8 +1969,8 @@ return 1;
     fn test_expression_statement() {
         let mut agent = Agent::new();
         let input = "123;";
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(&mut agent, lexer);
+        let lexer = Lexer::new("test", input);
+        let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
@@ -1974,8 +1992,8 @@ return 1;
         ($input:expr, $result:expr, $agent:expr $(,)?) => {{
             let mut agent = $agent;
             let input = $input;
-            let lexer = Lexer::new(input);
-            let parser = Parser::new(&mut agent, lexer);
+            let lexer = Lexer::new("test", input);
+            let parser = Parser::new("test", &mut agent, lexer);
 
             assert_eq!(
                 parser.collect::<Vec<_>>(),

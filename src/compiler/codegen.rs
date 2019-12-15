@@ -1,7 +1,7 @@
 use crate::agent::Agent;
 use crate::compiler::bytecode::Bytecode;
 use crate::compiler::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
-use crate::module::{Module, ModuleSpec};
+use crate::module::ModuleSpec;
 use crate::opcode::OpCode;
 
 pub type CompileResult<T> = Result<T, String>;
@@ -919,13 +919,14 @@ mod tests {
             let mut agent = $agent;
             let ast = {
                 let input = $input;
-                let lexer = Lexer::new(input);
-                let parser = Parser::new(&mut agent, lexer);
+                let lexer = Lexer::new("test", input);
+                let parser = Parser::new("test", &mut agent, lexer);
                 parser.collect::<Result<Vec<Statement>, String>>()?
             };
+            let name = agent.intern_string("test");
 
             let compiler = CodeGen::new(&mut agent);
-            let bytecode = compiler.compile(ast.iter())?.into();
+            let bytecode = compiler.compile(ModuleSpec::new(name), ast.iter())?.into();
 
             let expected = $expected.into::<Vec<_>>();
 

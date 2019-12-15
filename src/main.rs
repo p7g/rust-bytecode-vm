@@ -227,7 +227,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     let filename = args.get(1).expect("Expected filename");
 
-    compiler.compile_file(filename)?;
+    compiler.compile_file(std::env::current_dir()?, filename)?;
     let code = compiler.code();
 
     let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);

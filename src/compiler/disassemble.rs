@@ -1,7 +1,7 @@
 use crate::agent::Agent;
 use crate::opcode::OpCode;
 
-pub fn disassemble(agent: &Agent, code: &Vec<u8>) -> Result<(), String> {
+pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
     let mut ip = 0;
 
     macro_rules! next {
@@ -61,16 +61,13 @@ pub fn disassemble(agent: &Agent, code: &Vec<u8>) -> Result<(), String> {
             | OpCode::StoreGlobal
             | OpCode::ConstString
             | OpCode::InitModule => {
-                println!(
-                    "{:?}({:?})",
-                    instruction,
-                    agent.string_table[usize::from_le_bytes(next!(8))],
-                );
+                let idx = usize::from_le_bytes(next!(8));
+                println!("{:?}({} ({}))", instruction, agent.string_table[idx], idx,);
             }
 
             OpCode::LoadFromModule => {
                 println!(
-                    "{:?}({:?}.{:?})",
+                    "{:?}({}.{})",
                     instruction,
                     agent.string_table[usize::from_le_bytes(next!(8))],
                     agent.string_table[usize::from_le_bytes(next!(8))],

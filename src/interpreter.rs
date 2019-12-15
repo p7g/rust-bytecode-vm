@@ -118,7 +118,7 @@ impl<'a> Interpreter<'a> {
         macro_rules! arguments_index {
             () => {
                 if self.call_stack.is_empty() {
-                    return Err("Trying to access arguments when not in function".to_string());
+                    return error!("Trying to access arguments when not in function".to_string());
                 } else {
                     self.bp - 1
                 }
@@ -151,24 +151,37 @@ impl<'a> Interpreter<'a> {
         macro_rules! executing_function {
             () => {
                 if self.call_stack.is_empty() {
-                    return Err("Tried to get executing function in global scope".to_string());
+                    return error!("Tried to get executing function in global scope".to_string());
                 } else if let Some(func) = self.stack.get(self.bp) {
                     if let func @ Value::Function(_) = func {
                         func.clone()
                     } else {
-                        return Err(
+                        return error!(
                             "Tried to get executing function but bp didn't point to function"
-                                .to_string(),
+                                .to_string()
                         );
                     }
                 } else {
-                    return Err(format!(
+                    return error!(format!(
                         "Base pointer is not within stack: bp={} stack length={}",
                         self.bp,
                         self.stack.len()
                     ));
                 }
             };
+        }
+
+        macro_rules! current_module {
+            () => {{
+                if !self.call_stack.is_empty()
+                    && *self.call_stack.last().unwrap()
+                        != self.current_module.as_ref().unwrap().name()
+                {
+                    self.agent.modules.get_mut(self.call_stack.last().unwrap())
+                } else {
+                    self.current_module.as_mut()
+                }
+            }};
         }
 
         macro_rules! number_binop {
@@ -188,7 +201,7 @@ impl<'a> Interpreter<'a> {
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a as f64, b))
                     } else {
-                        panic!("Got unexpected value {:?} in {}", b, $name);
+                        return error!(format!("Got unexpected value {:?} in {}", b, $name));
                     }
                 } else if let Value::Double(a) = a {
                     if let Value::Integer(b) = b {
@@ -196,11 +209,21 @@ impl<'a> Interpreter<'a> {
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a, b))
                     } else {
-                        panic!("Got unexpected value {:?} in {}", b, $name);
+                        return error!(format!("Got unexpected value {:?} in {}", b, $name));
                     }
                 } else {
-                    panic!("Got unexpected value {:?} in {}", a, $name);
+                    return error!(format!("Got unexpected value {:?} in {}", a, $name));
                 })
+            }};
+        }
+
+        macro_rules! error {
+            ($msg:expr) => {{
+                Err(format!(
+                    "Error in {}: {}",
+                    self.agent.string_table[current_module!().unwrap().name()].clone(),
+                    $msg
+                ))
             }};
         }
 
@@ -286,7 +309,7 @@ impl<'a> Interpreter<'a> {
                                     } else {
                                         "<anonymous>"
                                     };
-                                    return Err(format!(
+                                    return error!(format!(
                                         "Function {} expected {} args, got {}",
                                         name, $arity, num_args
                                     ));
@@ -314,24 +337,29 @@ impl<'a> Interpreter<'a> {
                                 arity,
                                 address,
                                 name,
+                                module,
                                 ..
                             } => {
                                 ensure_arity!(*arity, name);
                                 self.call_stack.push(self.ip); // return address
                                 self.call_stack.push(self.bp); // current base pointer
                                 self.call_stack.push(num_args); // for cleanup
+                                self.call_stack.push(*module); // for accessing correct global scope
                                 self.bp = self.sp; // new base is at current stack index
                                 self.ip = *address; // jump into function
                                 push!(function);
                             }
                         }
                     } else {
-                        return Err(format!("Value {} is not callable", function));
+                        return error!(format!("Value {} is not callable", function));
                     }
                 }
 
                 OpCode::Return => {
                     let retval = pop!();
+                    self.call_stack
+                        .pop()
+                        .ok_or("Missing module id on call_stack")?;
                     let num_args = self
                         .call_stack
                         .pop()
@@ -346,7 +374,7 @@ impl<'a> Interpreter<'a> {
                             }
                             uv.borrow_mut().close(self.stack[i].clone());
                         } else {
-                            return Err("Had closed upvalue in agent.upvalues".to_string());
+                            return error!("Had closed upvalue in agent.upvalues".to_string());
                         }
                     }
 
@@ -372,11 +400,12 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::LoadGlobal => {
                     let id = usize::from_le_bytes(next!(8));
-                    if let Some(module) = &mut self.current_module {
+
+                    if let Some(module) = current_module!() {
                         if let Some(val) = module.global_scope.get(&id) {
                             push!(val.clone());
                         } else {
-                            return Err(format!(
+                            return error!(format!(
                                 "ReferenceError: {} is not defined",
                                 self.agent.string_table[id]
                             ));
@@ -389,7 +418,7 @@ impl<'a> Interpreter<'a> {
                 OpCode::DeclareGlobal => {
                     let id = usize::from_le_bytes(next!(8));
 
-                    if let Some(module) = &mut self.current_module {
+                    if let Some(module) = current_module!() {
                         module.global_scope.insert(id, Value::Null);
                     } else {
                         unreachable!();
@@ -399,11 +428,11 @@ impl<'a> Interpreter<'a> {
                 OpCode::StoreGlobal => {
                     let id = usize::from_le_bytes(next!(8));
 
-                    if let Some(module) = &mut self.current_module {
+                    if let Some(module) = current_module!() {
                         if module.global_scope.contains_key(&id) {
                             module.global_scope.insert(id, top!().clone());
                         } else {
-                            return Err(format!(
+                            return error!(format!(
                                 "ReferenceError: {} is not defined",
                                 self.agent.string_table[id]
                             ));
@@ -416,11 +445,17 @@ impl<'a> Interpreter<'a> {
                 OpCode::NewFunction => {
                     let arity = usize::from_le_bytes(next!(8));
                     let address = usize::from_le_bytes(next!(8));
+                    let module = if let Some(module) = current_module!() {
+                        module.name()
+                    } else {
+                        unreachable!();
+                    };
 
                     push!(Value::from(FunctionValue::User {
                         name: None,
                         address,
                         arity,
+                        module,
                         upvalues: Vec::new(),
                     }));
                 }
@@ -444,7 +479,7 @@ impl<'a> Interpreter<'a> {
                         upvalues.push(upvalue.clone());
                         push!(func);
                     } else {
-                        return Err("Cannot bind local to non-user function".to_string());
+                        return error!("Cannot bind local to non-user function".to_string());
                     }
                 }
 
@@ -464,7 +499,7 @@ impl<'a> Interpreter<'a> {
                         }
                         push!(func);
                     } else {
-                        return Err("Cannot bind upvalue to non-user function".to_string());
+                        return error!("Cannot bind upvalue to non-user function".to_string());
                     }
                 }
 
@@ -492,7 +527,7 @@ impl<'a> Interpreter<'a> {
                             unreachable!();
                         }
                     } else {
-                        return Err("Cannot bind argument to non-user function".to_string());
+                        return error!("Cannot bind argument to non-user function".to_string());
                     }
                 }
 
@@ -577,13 +612,13 @@ impl<'a> Interpreter<'a> {
                             if array.borrow().len() > idx {
                                 push!(array.borrow()[idx].clone());
                             } else {
-                                return Err(format!("Index {} is out of bounds", idx));
+                                return error!(format!("Index {} is out of bounds", idx));
                             }
                         } else {
-                            return Err("Trying to access index of non-array".to_string());
+                            return error!("Trying to access index of non-array".to_string());
                         }
                     } else {
-                        return Err("Array index must be an integer".to_string());
+                        return error!("Array index must be an integer".to_string());
                     }
                 }
 
@@ -597,13 +632,13 @@ impl<'a> Interpreter<'a> {
                             if array.borrow().len() > idx {
                                 array.borrow_mut()[idx] = top!().clone();
                             } else {
-                                return Err(format!("Index {} is out of bounds", idx));
+                                return error!(format!("Index {} is out of bounds", idx));
                             }
                         } else {
-                            return Err("Trying to set index of non-array".to_string());
+                            return error!("Trying to set index of non-array".to_string());
                         }
                     } else {
-                        return Err("Array index must be an integer".to_string());
+                        return error!("Array index must be an integer".to_string());
                     }
                 }
 
@@ -657,10 +692,10 @@ impl<'a> Interpreter<'a> {
                         if let Value::Integer(right) = right {
                             push!(Value::from(left & right));
                         } else {
-                            return Err("Bitwise operations only support integers".to_string());
+                            return error!("Bitwise operations only support integers".to_string());
                         }
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -672,10 +707,10 @@ impl<'a> Interpreter<'a> {
                         if let Value::Integer(right) = right {
                             push!(Value::from(left | right));
                         } else {
-                            return Err("Bitwise operations only support integers".to_string());
+                            return error!("Bitwise operations only support integers".to_string());
                         }
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -687,10 +722,10 @@ impl<'a> Interpreter<'a> {
                         if let Value::Integer(right) = right {
                             push!(Value::from(left ^ right));
                         } else {
-                            return Err("Bitwise operations only support integers".to_string());
+                            return error!("Bitwise operations only support integers".to_string());
                         }
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -700,7 +735,7 @@ impl<'a> Interpreter<'a> {
                     if let Value::Integer(right) = right {
                         push!(Value::from(!right));
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -718,10 +753,10 @@ impl<'a> Interpreter<'a> {
                         if let Value::Integer(right) = right {
                             push!(Value::from(left.wrapping_shl(right as u32)));
                         } else {
-                            return Err("Bitwise operations only support integers".to_string());
+                            return error!("Bitwise operations only support integers".to_string());
                         }
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -733,10 +768,10 @@ impl<'a> Interpreter<'a> {
                         if let Value::Integer(right) = right {
                             push!(Value::from(left.wrapping_shr(right as u32)));
                         } else {
-                            return Err("Bitwise operations only support integers".to_string());
+                            return error!("Bitwise operations only support integers".to_string());
                         }
                     } else {
-                        return Err("Bitwise operations only support integers".to_string());
+                        return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
@@ -746,7 +781,7 @@ impl<'a> Interpreter<'a> {
                     if let Value::Integer(right) = right {
                         push!(Value::from(-right));
                     } else {
-                        return Err("Expected integer in negation expression".to_string());
+                        return error!("Expected integer in negation expression".to_string());
                     }
                 }
 
@@ -1069,6 +1104,7 @@ mod tests {
             name: Some(name),
             address: 9,
             arity: 0,
+            module: 0,
             upvalues: Vec::new(),
         });
 

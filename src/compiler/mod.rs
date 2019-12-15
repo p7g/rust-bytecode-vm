@@ -36,21 +36,32 @@ impl<'a> Compiler<'a> {
         self.bytecode.map(Bytecode::into)
     }
 
-    pub(crate) fn compile_file<T>(&mut self, path: T) -> Result
+    pub(crate) fn compile_file<T, U>(&mut self, pwd: U, path: T) -> Result
     where
         T: AsRef<Path>,
+        U: AsRef<Path>,
     {
-        let path = path.as_ref();
-        let name = path.canonicalize()?.to_string_lossy().into_owned();
+        let mut path = path.as_ref();
+        let pwd = pwd.as_ref();
+        let joined = pwd.join(path);
+
+        if !path.is_absolute() {
+            path = joined.as_ref();
+        }
+
+        let path = path.canonicalize()?;
+        let pwd = path.parent().unwrap();
+        let name = path.to_string_lossy().into_owned();
 
         let text = fs::read_to_string(&name)?;
 
-        self.compile(name, text)
+        self.compile(pwd, name, text)
     }
 
-    pub(crate) fn compile<T>(&mut self, name: String, text: T) -> Result
+    pub(crate) fn compile<T, P>(&mut self, pwd: P, name: String, text: T) -> Result
     where
         T: AsRef<str>,
+        P: AsRef<Path> + Clone,
     {
         if self.compiled_modules.contains(&name) {
             return Ok(());
@@ -58,12 +69,12 @@ impl<'a> Compiler<'a> {
 
         let text = text.as_ref();
 
-        let lexer = parser::Lexer::new(text);
-        let mut parser = parser::Parser::new(self.agent, lexer);
+        let lexer = parser::Lexer::new(&name, text);
+        let mut parser = parser::Parser::new(&name, self.agent, lexer);
         let parsed_module = parser.parse()?;
 
         for import in parsed_module.imports {
-            self.compile_file(import)?;
+            self.compile_file(pwd.clone(), import)?;
         }
 
         let gen = codegen::CodeGen::with_bytecode(self.agent, self.bytecode.take().unwrap());
