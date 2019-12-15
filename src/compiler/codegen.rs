@@ -926,9 +926,9 @@ mod tests {
             let name = agent.intern_string("test");
 
             let compiler = CodeGen::new(&mut agent);
-            let bytecode = compiler.compile(ModuleSpec::new(name), ast.iter())?.into();
+            let bytecode: Vec<u8> = compiler.compile(ModuleSpec::new(name), ast.iter())?.into();
 
-            let expected = $expected.into::<Vec<_>>();
+            let expected: Vec<u8> = $expected.into();
 
             println!("Expected:");
             disassemble(&agent, &expected)?;
@@ -941,31 +941,17 @@ mod tests {
         }};
     }
 
-    macro_rules! bc {
-        ($($tt:tt)*) => {{
-            let mut bc = Bytecode::new();
-            bytecode! { (&mut bc)
-                $($tt)*
-            };
-            bc
-        }};
-    }
-
     #[test]
     fn test_let_declaration_without_value() -> Result<(), String> {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        test_statement!(
-            "let test;",
-            bc! {
-                const_null
-                declare_global (ident_test)
-                store_global (ident_test)
-                pop
-            },
-            agent,
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop();
+        test_statement!("let test;", bc, agent,)
     }
 
     #[test]
@@ -973,16 +959,12 @@ mod tests {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        test_statement!(
-            "let test = null;",
-            bc! {
-                const_null
-                declare_global (ident_test)
-                store_global (ident_test)
-                pop
-            },
-            agent,
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop();
+        test_statement!("let test = null;", bc, agent)
     }
 
     #[test]
@@ -990,149 +972,141 @@ mod tests {
         let mut agent = Agent::new();
         let ident_test = agent.intern_string("test");
 
-        test_statement!(
-            "function test() {}",
-            bc! {
-                new_function 0 start
-                declare_global (ident_test)
-                store_global (ident_test)
-                pop
-                jump end
-            start:
-                const_null
-                return
-            end:
-            },
-            agent,
-        )
+        let mut bc = Bytecode::new();
+        bc.op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("start")
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("start")
+            .const_null()
+            .ret()
+            .label("end");
+        test_statement!("function test() {}", bc, agent)
     }
 
     #[test]
     fn test_if_statement_no_else() -> Result<(), String> {
-        test_statement!(
-            "if null {}",
-            bc! {
-                const_null
-                jump_if_false end
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .label("end");
+        test_statement!("if null {}", bc)
     }
 
     #[test]
     fn test_if_statement() -> Result<(), String> {
-        test_statement!(
-            "if null {} else {}",
-            bc! {
-                const_null
-                jump_if_false else_body
-                jump end
-            else_body:
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("else_body")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("else_body")
+            .label("end");
+        test_statement!("if null {} else {}", bc)
     }
 
     #[test]
     fn test_if_statement_else_if() -> Result<(), String> {
-        test_statement!(
-            "if null {} else if null {}",
-            bc! {
-                const_null
-                jump_if_false else_body
-                jump end
-            else_body:
-                const_null
-                jump_if_false end
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("else_body")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("else_body")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .label("end");
+        test_statement!("if null {} else if null {}", bc)
     }
 
     #[test]
     fn test_if_statement_else_if_else() -> Result<(), String> {
-        test_statement!(
-            "if null {} else if null {} else {}",
-            bc! {
-                const_null
-                jump_if_false else_body
-                jump end
-            else_body:
-                const_null
-                jump_if_false else_body2
-                jump end
-            else_body2:
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+
+        bc.const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("else_body")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("else_body")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("else_body2")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("else_body2")
+            .label("end");
+        test_statement!("if null {} else if null {} else {}", bc)
     }
 
     #[test]
     fn test_for_statement_no_stuff() -> Result<(), String> {
-        test_statement!(
-            "for ;; {}",
-            bc! {
-                start:
-                    jump start
-            },
-        )
+        let mut bc = Bytecode::new();
+
+        bc.label("start").op(OpCode::Jump).address_of("start");
+        test_statement!("for ;; {}", bc)
     }
 
     #[test]
     fn test_for_statement() -> Result<(), String> {
         let mut agent = Agent::new();
         let ident_a = agent.intern_string("a");
-        test_statement!(
-            "for let a; null; null {}",
-            bc! {
-                const_null
-                declare_global (ident_a)
-                store_global (ident_a)
-                pop
-            start:
-                const_null
-                jump_if_false end
-            inc:
-                const_null
-                pop
-                jump start
-            end:
-            },
-            agent,
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null()
+            .declare_global(ident_a)
+            .store_global(ident_a)
+            .pop()
+            .label("start")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .label("inc")
+            .const_null()
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("start")
+            .label("end");
+        test_statement!("for let a; null; null {}", bc, agent)
     }
 
     #[test]
     fn test_while_statement() -> Result<(), String> {
-        test_statement!(
-            "while null {}",
-            bc! {
-            start:
-                const_null
-                jump_if_false end
-                jump start
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.label("start")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .op(OpCode::Jump)
+            .address_of("start")
+            .label("end");
+        test_statement!("while null {}", bc)
     }
 
     #[test]
     fn test_break_statement_valid() -> Result<(), String> {
-        test_statement!(
-            "while null { break; }",
-            bc! {
-            start:
-                const_null
-                jump_if_false end
-                jump end
-                jump start
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.label("start")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .op(OpCode::Jump)
+            .address_of("start")
+            .label("end");
+        test_statement!("while null { break; }", bc)
     }
 
     fn break_statement_invalid() -> Result<(), String> {
-        test_statement!("break;", bc! {})
+        test_statement!("break;", Bytecode::new())
     }
 
     #[test]
@@ -1142,44 +1116,39 @@ mod tests {
 
     #[test]
     fn test_continue_statement_while() -> Result<(), String> {
-        test_statement!(
-            "while null { continue; }",
-            bc! {
-            start:
-                const_null
-                jump_if_false end
-                jump start
-                jump start
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.label("start")
+            .const_null()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .op(OpCode::Jump)
+            .address_of("start")
+            .op(OpCode::Jump)
+            .address_of("start")
+            .label("end");
+        test_statement!("while null { continue; }", bc)
     }
 
     #[test]
     fn test_continue_statement_for() -> Result<(), String> {
-        test_statement!(
-            "for ;; null { continue; }",
-            bc! {
-            start:
-                jump inc
-            inc:
-                const_null
-                pop
-                jump start
-            end:
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.label("start")
+            .op(OpCode::Jump)
+            .address_of("inc")
+            .label("inc")
+            .const_null()
+            .pop()
+            .op(OpCode::Jump)
+            .address_of("start")
+            .label("end");
+        test_statement!("for ;; null { continue; }", bc)
     }
 
     #[test]
     fn test_expression_statement() -> Result<(), String> {
-        test_statement!(
-            "null;",
-            bc! {
-                const_null
-                pop
-            },
-        )
+        let mut bc = Bytecode::new();
+        bc.const_null().pop();
+        test_statement!("null;", bc)
     }
 
     #[test]

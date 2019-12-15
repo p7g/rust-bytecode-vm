@@ -898,9 +898,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_string (agent) "hello world"
-        };
+        bytecode.const_string(agent.intern_string("hello world"));
 
         let mut interpreter = Interpreter::new(&mut agent);
         let code = bytecode.into();
@@ -915,11 +913,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            const_double 1.23
-            add
-        };
+        bytecode.const_int(123).const_double(1.23).add();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -933,11 +927,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            const_double 1.23
-            sub
-        };
+        bytecode.const_int(123).const_double(1.23).sub();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -951,11 +941,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            const_double 2.0
-            mul
-        };
+        bytecode.const_int(123).const_double(2.0).mul();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -969,11 +955,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 124
-            const_double 2.0
-            div
-        };
+        bytecode.const_int(124).const_double(2.0).div();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -987,11 +969,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 124
-            const_double 2.0
-            mod
-        };
+        bytecode.const_int(124).const_double(2.0).rem();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -1005,11 +983,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 4
-            const_int 2
-            exp
-        };
+        bytecode.const_int(4).const_int(2).exp();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -1023,16 +997,15 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 4
-            jump 29
-            const_int 8
-            add
-            halt
-            const_int 12
-            mul
-            halt
-        };
+        bytecode
+            .const_int(4)
+            .jump(29)
+            .const_int(8)
+            .add()
+            .halt()
+            .const_int(12)
+            .mul()
+            .halt();
 
         let code = bytecode.into();
         let result = interpreter.evaluate(code);
@@ -1045,21 +1018,22 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            const_int 234
-            const_int 1
-            jump_if_true one
-            mul
-            halt
-        one:
-            const_false
-            jump_if_true two
-            add
-            halt
-        two:
-            sub
-        };
+        bytecode
+            .const_int(123)
+            .const_int(234)
+            .const_int(1)
+            .op(OpCode::JumpIfTrue)
+            .address_of("one")
+            .mul()
+            .halt()
+            .label("one")
+            .const_false()
+            .op(OpCode::JumpIfTrue)
+            .address_of("two")
+            .add()
+            .halt()
+            .label("two")
+            .sub();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1073,20 +1047,21 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_true
-            jump_if_false one
-            const_int 10
-            const_int 2
-            const_string (agent) ""
-            jump_if_false two
-        one:
-            add
-            halt
-        two:
-            mul
-            halt
-        };
+        bytecode
+            .const_true()
+            .op(OpCode::JumpIfTrue)
+            .address_of("one")
+            .const_int(10)
+            .const_int(2)
+            .const_string(agent.intern_string(""))
+            .op(OpCode::JumpIfFalse)
+            .address_of("two")
+            .label("one")
+            .add()
+            .halt()
+            .label("two")
+            .mul()
+            .halt();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1112,18 +1087,16 @@ mod tests {
         global.insert(name, ret123);
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .const_int(123)
+            .ret()
+            .label("main")
+            .load_global(name)
+            .call(0);
 
-            const_int 123
-            return
-
-        main:
-            load_global name
-            call 0
-        };
-
-        let code = bytecode.into();
+        let code: Vec<u8> = bytecode.into();
         crate::compiler::disassemble::disassemble(&agent, &code).unwrap();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
         let result = interpreter.evaluate(code);
@@ -1136,10 +1109,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            pop
-        };
+        bytecode.const_int(123).pop();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1153,12 +1123,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-            const_double 432.0
-
-            load_local 0
-        };
+        bytecode.const_int(123).const_double(432.0).load_local(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1172,15 +1137,12 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 123
-
-            const_int 234
-            store_local 0
-            pop
-
-            load_local 0
-        };
+        bytecode
+            .const_int(123)
+            .const_int(234)
+            .store_local(0)
+            .pop()
+            .load_local(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1197,9 +1159,7 @@ mod tests {
         global.insert(agent.intern_string("test"), Value::from("test"));
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            load_global (agent.intern_string("test"))
-        };
+        bytecode.load_global(agent.intern_string("test"));
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
@@ -1231,11 +1191,10 @@ mod tests {
         global.insert(agent.intern_string("test"), Value::from(3));
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            load_global (agent.intern_string("test"))
-            const_int 3
-            exp
-        };
+        bytecode
+            .load_global(agent.intern_string("test"))
+            .const_int(3)
+            .exp();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
@@ -1249,17 +1208,17 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func:
-            const_int 999
-            return
-
-        main:
-            new_function 0 func
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func")
+            .const_int(999)
+            .ret()
+            .label("main")
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func")
+            .call(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1273,19 +1232,19 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func:
-            load_upvalue 0
-            return
-
-        main:
-            const_int 123
-            new_function 0 func
-            bind_local 0
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func")
+            .load_upvalue(0)
+            .ret()
+            .label("main")
+            .const_int(123)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func")
+            .bind_local(0)
+            .call(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1299,25 +1258,26 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func1:
-            new_function 0 func2
-            bind_upvalue 0
-            return
-
-        func2:
-            load_upvalue 0
-            return
-
-        main:
-            const_int 2334
-            new_function 0 func1
-            bind_local 0
-            call 0
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func1")
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func2")
+            .bind_upvalue(0)
+            .ret()
+            .label("func2")
+            .load_upvalue(0)
+            .ret()
+            .label("main")
+            .const_int(2334)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func1")
+            .bind_local(0)
+            .call(0)
+            .call(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1331,24 +1291,25 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func1:
-            new_function 0 func2
-            bind_argument 0
-            return
-
-        func2:
-            load_upvalue 0
-            return
-
-        main:
-            const_int 2334
-            new_function 1 func1
-            call 1
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func1")
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func2")
+            .bind_argument(0)
+            .ret()
+            .label("func2")
+            .load_upvalue(0)
+            .ret()
+            .label("main")
+            .const_int(2334)
+            .op(OpCode::NewFunction)
+            .usize(1)
+            .address_of("func1")
+            .call(1)
+            .call(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1362,19 +1323,19 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        test:
-            load_upvalue 0
-            return
-
-        main:
-            const_string (agent) "hello"
-            new_function 0 test
-            bind_local 0
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("test")
+            .load_upvalue(0)
+            .ret()
+            .label("main")
+            .const_string(agent.intern_string("hello"))
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("test")
+            .bind_local(0)
+            .call(0);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1391,46 +1352,47 @@ mod tests {
         let b = agent.intern_string("b");
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        test:
-            const_int 0
-            new_function 0 func_a
-            bind_local 0
-            store_global a
-            new_function 0 func_b
-            bind_local 0
-            store_global b
-            const_null
-            return
-
-        func_a:
-            load_upvalue 0
-            return
-
-        func_b:
-            load_upvalue 0
-            const_int 1
-            add
-            store_upvalue 0
-            pop
-            const_null
-            return
-
-        main:
-            new_function 0 test
-            call 0
-            pop
-            load_global b
-            call 0
-            pop
-            load_global b
-            call 0
-            pop
-            load_global a
-            call 0
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("test")
+            .const_int(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func_a")
+            .bind_local(0)
+            .store_global(a)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("func_b")
+            .bind_local(0)
+            .store_global(b)
+            .const_null()
+            .ret()
+            .label("func_a")
+            .load_upvalue(0)
+            .ret()
+            .label("func_b")
+            .load_upvalue(0)
+            .const_int(1)
+            .add()
+            .store_upvalue(0)
+            .pop()
+            .const_null()
+            .ret()
+            .label("main")
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .address_of("test")
+            .call(0)
+            .pop()
+            .load_global(b)
+            .call(0)
+            .pop()
+            .load_global(b)
+            .call(0)
+            .load_global(a)
+            .call(0);
 
         let code = bytecode.into();
 
@@ -1449,18 +1411,18 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func:
-            load_argument 0
-            return
-
-        main:
-            const_string (agent) "hullo"
-            new_function 1 func
-            call 1
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func")
+            .load_argument(0)
+            .ret()
+            .label("main")
+            .const_string(agent.intern_string("hullo"))
+            .op(OpCode::NewFunction)
+            .usize(1)
+            .address_of("func")
+            .call(1);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1474,22 +1436,22 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            jump main
-
-        func:
-            load_argument 0
-            const_int 2
-            add
-            store_argument 0
-            load_argument 0
-            return
-
-        main:
-            const_int 1
-            new_function 1 func
-            call 1
-        };
+        bytecode
+            .op(OpCode::Jump)
+            .address_of("main")
+            .label("func")
+            .load_argument(0)
+            .const_int(2)
+            .add()
+            .store_argument(0)
+            .load_argument(0)
+            .ret()
+            .label("main")
+            .const_int(1)
+            .op(OpCode::NewFunction)
+            .usize(1)
+            .address_of("func")
+            .call(1);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1503,9 +1465,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            new_array 10
-        };
+        bytecode.new_array(10);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1524,11 +1484,7 @@ mod tests {
         global.insert(array, Value::from(vec![Value::Null, Value::from(123)]));
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            load_global array
-            const_int 1
-            array_get
-        };
+        bytecode.load_global(array).const_int(1).array_get();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
@@ -1547,14 +1503,13 @@ mod tests {
         global.insert(array, Value::from(vec![Value::Null, Value::from(123)]));
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            load_global array
-            const_int 1
-            array_set
-            pop
-            load_global array
-        };
+        bytecode
+            .const_int(9229)
+            .load_global(array)
+            .const_int(1)
+            .array_set()
+            .pop()
+            .load_global(array);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
@@ -1571,15 +1526,14 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9229
-            equal
-            const_int 9229
-            const_int 9230
-            equal
-            new_array_with_values 2
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9229)
+            .equal()
+            .const_int(9229)
+            .const_int(9230)
+            .equal()
+            .new_array_with_values(2);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1596,15 +1550,14 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9228
-            not_equal
-            const_int 9229
-            const_int 9229
-            not_equal
-            new_array_with_values 2
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9228)
+            .not_equal()
+            .const_int(9229)
+            .const_int(9229)
+            .not_equal()
+            .new_array_with_values(2);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1621,18 +1574,17 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9228
-            less_than
-            const_int 9229
-            const_int 9229
-            less_than
-            const_int 9229
-            const_int 9230
-            less_than
-            new_array_with_values 3
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9228)
+            .less_than()
+            .const_int(9229)
+            .const_int(9229)
+            .less_than()
+            .const_int(9229)
+            .const_int(9230)
+            .less_than()
+            .new_array_with_values(3);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1653,18 +1605,17 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9229
-            less_than_equal
-            const_int 9228
-            const_int 9229
-            less_than_equal
-            const_int 9230
-            const_int 9229
-            less_than_equal
-            new_array_with_values 3
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9229)
+            .less_than_equal()
+            .const_int(9228)
+            .const_int(9229)
+            .less_than_equal()
+            .const_int(9230)
+            .const_int(9229)
+            .less_than_equal()
+            .new_array_with_values(3);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1685,18 +1636,17 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9229
-            greater_than
-            const_int 9229
-            const_int 9228
-            greater_than
-            const_int 9229
-            const_int 9230
-            greater_than
-            new_array_with_values 3
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9229)
+            .greater_than()
+            .const_int(9229)
+            .const_int(9228)
+            .greater_than()
+            .const_int(9229)
+            .const_int(9230)
+            .greater_than()
+            .new_array_with_values(3);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1717,18 +1667,17 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 9229
-            const_int 9229
-            greater_than_equal
-            const_int 9228
-            const_int 9229
-            greater_than_equal
-            const_int 9230
-            const_int 9229
-            greater_than_equal
-            new_array_with_values 3
-        };
+        bytecode
+            .const_int(9229)
+            .const_int(9229)
+            .greater_than_equal()
+            .const_int(9228)
+            .const_int(9229)
+            .greater_than_equal()
+            .const_int(9230)
+            .const_int(9229)
+            .greater_than_equal()
+            .new_array_with_values(3);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1749,21 +1698,20 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 6
-            const_int 1
-            bitwise_and
-            const_int 6
-            const_int 2
-            bitwise_and
-            const_int 1
-            const_int 6
-            bitwise_and
-            const_int 2
-            const_int 6
-            bitwise_and
-            new_array_with_values 4
-        };
+        bytecode
+            .const_int(6)
+            .const_int(1)
+            .bitwise_and()
+            .const_int(6)
+            .const_int(2)
+            .bitwise_and()
+            .const_int(1)
+            .const_int(6)
+            .bitwise_and()
+            .const_int(2)
+            .const_int(6)
+            .bitwise_and()
+            .new_array_with_values(4);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1785,21 +1733,20 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 6
-            const_int 1
-            bitwise_or
-            const_int 6
-            const_int 2
-            bitwise_or
-            const_int 1
-            const_int 6
-            bitwise_or
-            const_int 2
-            const_int 6
-            bitwise_or
-            new_array_with_values 4
-        };
+        bytecode
+            .const_int(6)
+            .const_int(1)
+            .bitwise_or()
+            .const_int(6)
+            .const_int(2)
+            .bitwise_or()
+            .const_int(1)
+            .const_int(6)
+            .bitwise_or()
+            .const_int(2)
+            .const_int(6)
+            .bitwise_or()
+            .new_array_with_values(4);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1821,21 +1768,20 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 6
-            const_int 1
-            bitwise_xor
-            const_int 6
-            const_int 2
-            bitwise_xor
-            const_int 1
-            const_int 6
-            bitwise_xor
-            const_int 2
-            const_int 6
-            bitwise_xor
-            new_array_with_values 4
-        };
+        bytecode
+            .const_int(6)
+            .const_int(1)
+            .bitwise_xor()
+            .const_int(6)
+            .const_int(2)
+            .bitwise_xor()
+            .const_int(1)
+            .const_int(6)
+            .bitwise_xor()
+            .const_int(2)
+            .const_int(6)
+            .bitwise_xor()
+            .new_array_with_values(4);
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1857,10 +1803,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 0
-            bitwise_not
-        };
+        bytecode.const_int(0).bitwise_not();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1874,10 +1817,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_true
-            not
-        };
+        bytecode.const_true().not();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1891,11 +1831,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 2
-            const_int 3
-            shift_left
-        };
+        bytecode.const_int(2).const_int(3).shift_left();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -1909,11 +1845,7 @@ mod tests {
         let mut agent = Agent::new();
 
         let mut bytecode = Bytecode::new();
-        bytecode! { (&mut bytecode)
-            const_int 16
-            const_int 3
-            shift_right
-        };
+        bytecode.const_int(16).const_int(3).shift_right();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
