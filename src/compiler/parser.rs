@@ -1451,7 +1451,9 @@ function test(
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
-            vec![Err("Error in test: Expected Semicolon, found end of input".to_string()),],
+            vec![Err(
+                "Error in test: Expected Semicolon, found end of input".to_string()
+            ),],
         );
     }
 
@@ -1961,7 +1963,9 @@ return 1;
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
-            vec![Err("Error in test: Import filename must be a string literal".to_string())]
+            vec![Err(
+                "Error in test: Import filename must be a string literal".to_string()
+            )]
         );
     }
 

@@ -947,10 +947,12 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .declare_global(ident_test)
             .store_global(ident_test)
-            .pop();
+            .pop()
+            .end_module();
         test_statement!("let test;", bc, agent,)
     }
 
@@ -960,10 +962,12 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .declare_global(ident_test)
             .store_global(ident_test)
-            .pop();
+            .pop()
+            .end_module();
         test_statement!("let test = null;", bc, agent)
     }
 
@@ -973,7 +977,8 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.op(OpCode::NewFunction)
+        bc.init_module(ident_test)
+            .op(OpCode::NewFunction)
             .usize(0)
             .address_of("start")
             .declare_global(ident_test)
@@ -984,37 +989,52 @@ mod tests {
             .label("start")
             .const_null()
             .ret()
-            .label("end");
+            .label("end")
+            .end_module();
         test_statement!("function test() {}", bc, agent)
     }
 
     #[test]
     fn test_if_statement_no_else() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("end")
-            .label("end");
-        test_statement!("if null {}", bc)
+            .label("end")
+            .end_module();
+        test_statement!("if null {}", bc, agent)
     }
 
     #[test]
     fn test_if_statement() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("else_body")
             .op(OpCode::Jump)
             .address_of("end")
             .label("else_body")
-            .label("end");
-        test_statement!("if null {} else {}", bc)
+            .label("end")
+            .end_module();
+        test_statement!("if null {} else {}", bc, agent)
     }
 
     #[test]
     fn test_if_statement_else_if() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("else_body")
             .op(OpCode::Jump)
@@ -1023,15 +1043,20 @@ mod tests {
             .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("end")
-            .label("end");
-        test_statement!("if null {} else if null {}", bc)
+            .label("end")
+            .end_module();
+        test_statement!("if null {} else if null {}", bc, agent)
     }
 
     #[test]
     fn test_if_statement_else_if_else() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
 
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("else_body")
             .op(OpCode::Jump)
@@ -1043,24 +1068,35 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("else_body2")
-            .label("end");
-        test_statement!("if null {} else if null {} else {}", bc)
+            .label("end")
+            .end_module();
+        test_statement!("if null {} else if null {} else {}", bc, agent)
     }
 
     #[test]
     fn test_for_statement_no_stuff() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
 
-        bc.label("start").op(OpCode::Jump).address_of("start");
-        test_statement!("for ;; {}", bc)
+        bc.init_module(ident_test)
+            .label("start")
+            .op(OpCode::Jump)
+            .address_of("start")
+            .end_module();
+        test_statement!("for ;; {}", bc, agent)
     }
 
     #[test]
     fn test_for_statement() -> Result<(), String> {
         let mut agent = Agent::new();
         let ident_a = agent.intern_string("a");
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .declare_global(ident_a)
             .store_global(ident_a)
             .pop()
@@ -1073,27 +1109,37 @@ mod tests {
             .pop()
             .op(OpCode::Jump)
             .address_of("start")
-            .label("end");
+            .label("end")
+            .end_module();
         test_statement!("for let a; null; null {}", bc, agent)
     }
 
     #[test]
     fn test_while_statement() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.label("start")
+        bc.init_module(ident_test)
+            .label("start")
             .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("end")
             .op(OpCode::Jump)
             .address_of("start")
-            .label("end");
-        test_statement!("while null {}", bc)
+            .label("end")
+            .end_module();
+        test_statement!("while null {}", bc, agent)
     }
 
     #[test]
     fn test_break_statement_valid() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.label("start")
+        bc.init_module(ident_test)
+            .label("start")
             .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("end")
@@ -1101,12 +1147,18 @@ mod tests {
             .address_of("end")
             .op(OpCode::Jump)
             .address_of("start")
-            .label("end");
-        test_statement!("while null { break; }", bc)
+            .label("end")
+            .end_module();
+        test_statement!("while null { break; }", bc, agent)
     }
 
     fn break_statement_invalid() -> Result<(), String> {
-        test_statement!("break;", Bytecode::new())
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.init_module(ident_test).end_module();
+        test_statement!("break;", bc, agent)
     }
 
     #[test]
@@ -1116,8 +1168,12 @@ mod tests {
 
     #[test]
     fn test_continue_statement_while() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.label("start")
+        bc.init_module(ident_test)
+            .label("start")
             .const_null()
             .op(OpCode::JumpIfFalse)
             .address_of("end")
@@ -1125,14 +1181,19 @@ mod tests {
             .address_of("start")
             .op(OpCode::Jump)
             .address_of("start")
-            .label("end");
-        test_statement!("while null { continue; }", bc)
+            .label("end")
+            .end_module();
+        test_statement!("while null { continue; }", bc, agent)
     }
 
     #[test]
     fn test_continue_statement_for() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.label("start")
+        bc.init_module(ident_test)
+            .label("start")
             .op(OpCode::Jump)
             .address_of("inc")
             .label("inc")
@@ -1140,15 +1201,19 @@ mod tests {
             .pop()
             .op(OpCode::Jump)
             .address_of("start")
-            .label("end");
-        test_statement!("for ;; null { continue; }", bc)
+            .label("end")
+            .end_module();
+        test_statement!("for ;; null { continue; }", bc, agent)
     }
 
     #[test]
     fn test_expression_statement() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null().pop();
-        test_statement!("null;", bc)
+        bc.init_module(ident_test).const_null().pop().end_module();
+        test_statement!("null;", bc, agent)
     }
 
     #[test]
@@ -1157,7 +1222,8 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.op(OpCode::NewFunction)
+        bc.init_module(ident_test)
+            .op(OpCode::NewFunction)
             .usize(0)
             .address_of("test")
             .declare_global(ident_test)
@@ -1171,8 +1237,9 @@ mod tests {
             .ret()
             .const_null()
             .ret()
-            .label("end");
-        test_statement!("function test() { let b; return b; }", bc)
+            .label("end")
+            .end_module();
+        test_statement!("function test() { let b; return b; }", bc, agent)
     }
 
     #[test]
@@ -1181,13 +1248,15 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .declare_global(ident_test)
             .store_global(ident_test)
             .pop()
             .load_global(ident_test)
-            .pop();
-        test_statement!("let test; test;", bc)
+            .pop()
+            .end_module();
+        test_statement!("let test; test;", bc, agent)
     }
 
     #[test]
@@ -1196,7 +1265,8 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.op(OpCode::NewFunction)
+        bc.init_module(ident_test)
+            .op(OpCode::NewFunction)
             .usize(1)
             .address_of("test")
             .declare_global(ident_test)
@@ -1209,8 +1279,9 @@ mod tests {
             .ret()
             .const_null()
             .ret()
-            .label("end");
-        test_statement!("function test(a) { return a; }", bc)
+            .label("end")
+            .end_module();
+        test_statement!("function test(a) { return a; }", bc, agent)
     }
 
     #[test]
@@ -1219,7 +1290,8 @@ mod tests {
         let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.op(OpCode::NewFunction)
+        bc.init_module(ident_test)
+            .op(OpCode::NewFunction)
             .usize(0)
             .address_of("test")
             .declare_global(ident_test)
@@ -1244,7 +1316,8 @@ mod tests {
             .ret()
             .const_null()
             .ret()
-            .label("end");
+            .label("end")
+            .end_module();
         test_statement!(
             "
             function test() {
@@ -1252,62 +1325,97 @@ mod tests {
                 return function() { return a; };
             }
         ",
-            bc
+            bc,
+            agent
         )
     }
 
     #[test]
     fn test_integer_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_int(123).pop();
-        test_statement!("123;", bc)
+        bc.init_module(ident_test).const_int(123).pop().end_module();
+        test_statement!("123;", bc, agent)
     }
 
     #[test]
     fn test_double_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_double(1.23).pop();
-        test_statement!("1.23;", bc)
+        bc.init_module(ident_test)
+            .const_double(1.23)
+            .pop()
+            .end_module();
+        test_statement!("1.23;", bc, agent)
     }
 
     #[test]
     fn test_string_expression() -> Result<(), String> {
         let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let s = agent.intern_string("hello");
         let mut bc = Bytecode::new();
-        bc.const_string(s).pop();
-        test_statement!("\"hello\";", bc)
+        bc.init_module(ident_test)
+            .const_string(s)
+            .pop()
+            .end_module();
+        test_statement!("\"hello\";", bc, agent)
     }
 
     #[test]
     fn test_null_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_null().pop();
-        test_statement!("null;", bc)
+        bc.init_module(ident_test).const_null().pop().end_module();
+        test_statement!("null;", bc, agent)
     }
 
     #[test]
     fn test_boolean_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_true().pop().const_false().pop();
-        test_statement!("true; false;", bc)
+        bc.init_module(ident_test)
+            .const_true()
+            .pop()
+            .const_false()
+            .pop()
+            .end_module();
+        test_statement!("true; false;", bc, agent)
     }
 
     #[test]
     fn test_array_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_int(1)
+        bc.init_module(ident_test)
+            .const_int(1)
             .const_int(2)
             .const_int(3)
             .new_array_with_values(3)
-            .pop();
-        test_statement!("[1, 2, 3];", bc)
+            .pop()
+            .end_module();
+        test_statement!("[1, 2, 3];", bc, agent)
     }
 
     #[test]
     fn test_function_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.op(OpCode::NewFunction)
+        bc.init_module(ident_test)
+            .op(OpCode::NewFunction)
             .usize(0)
             .address_of("func")
             .op(OpCode::Jump)
@@ -1316,57 +1424,92 @@ mod tests {
             .const_null()
             .ret()
             .label("end")
-            .pop();
-        test_statement!("(function() {});", bc)
+            .pop()
+            .end_module();
+        test_statement!("(function() {});", bc, agent)
     }
 
     #[test]
     fn test_binary_operation_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_int(1).const_int(2).const_int(3).mul().add().pop();
-        test_statement!("1 + 2 * 3;", bc)
+        bc.init_module(ident_test)
+            .const_int(1)
+            .const_int(2)
+            .const_int(3)
+            .mul()
+            .add()
+            .pop()
+            .end_module();
+        test_statement!("1 + 2 * 3;", bc, agent)
     }
 
     #[test]
     fn test_assignment_expression() -> Result<(), String> {
         let mut agent = Agent::new();
         let a = agent.intern_string("a");
+        let ident_test = agent.intern_string("test");
         let mut bc = Bytecode::new();
-        bc.const_null()
+        bc.init_module(ident_test)
+            .const_null()
             .declare_global(a)
             .store_global(a)
             .pop()
             .const_int(1)
             .store_global(a)
-            .pop();
-        test_statement!("let a; a = 1;", bc)
+            .pop()
+            .end_module();
+        test_statement!("let a; a = 1;", bc, agent)
     }
 
     #[test]
     fn test_call_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_int(1).const_null().call(1).pop();
-        test_statement!("null(1);", bc)
+        bc.init_module(ident_test)
+            .const_int(1)
+            .const_null()
+            .call(1)
+            .pop()
+            .end_module();
+        test_statement!("null(1);", bc, agent)
     }
 
     #[test]
     fn test_index_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.new_array_with_values(0).const_int(0).array_get().pop();
-        test_statement!("[][0];", bc)
+        bc.init_module(ident_test)
+            .new_array_with_values(0)
+            .const_int(0)
+            .array_get()
+            .pop()
+            .end_module();
+        test_statement!("[][0];", bc, agent)
     }
 
     #[test]
     fn test_unary_operation_expression() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
         let mut bc = Bytecode::new();
-        bc.const_int(1)
+        bc.init_module(ident_test)
+            .const_int(1)
             .bitwise_not()
             .const_int(2)
             .less_than()
             .const_false()
             .not()
             .equal()
-            .pop();
-        test_statement!("~1 < 2 == !false;", bc)
+            .pop()
+            .end_module();
+        test_statement!("~1 < 2 == !false;", bc, agent)
     }
 }
