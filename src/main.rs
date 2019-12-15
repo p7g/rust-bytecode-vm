@@ -2,23 +2,15 @@
 
 mod agent;
 #[macro_use]
-// mod bytecode;
-// mod code_object;
 mod compiler;
-// mod disassemble;
 mod interpreter;
 mod module;
 mod opcode;
-// mod parser;
 mod value;
 
 use std::collections::HashMap;
 
 use agent::Agent;
-// #[macro_use]
-// use bytecode::Bytecode;
-// use code_object::CodeObject;
-// use disassemble::disassemble;
 use compiler::Compiler;
 use interpreter::Interpreter;
 use value::{FunctionValue, Value};
@@ -232,23 +224,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
     interpreter.evaluate(code.unwrap())?;
-
-    // let code = {
-    //     let args = std::env::args().collect::<Vec<_>>();
-    //     let filename = args.get(1).expect("Expected filename");
-    //     let content = std::fs::read_to_string(filename).expect("Unable to read file");
-
-    //     let lexer = parser::Lexer::new(&content);
-    //     let parser = parser::Parser::new(&mut agent, lexer);
-    //     let statements = parser.collect::<Result<Vec<_>, String>>()?;
-    //     let compiler = compiler::Compiler::new();
-    //     compiler.compile(statements.iter())?
-    // };
-
-    // let code_object = code;
-    // // disassemble(&agent, &code_object)?;
-    // let mut interpreter = Interpreter::with_global(&mut agent, global);
-    // interpreter.evaluate(code_object)?;
 
     Ok(())
 }
