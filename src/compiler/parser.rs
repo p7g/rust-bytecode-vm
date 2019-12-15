@@ -500,7 +500,7 @@ impl<'a> Parser<'a> {
                         unreachable!();
                     }
                 } else if let Err(e) = i {
-                    self.error(e)
+                    Err(e)
                 } else {
                     unreachable!();
                 }
@@ -521,7 +521,7 @@ impl<'a> Parser<'a> {
     pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
         match self.peek() {
             Ok(Some(_)) => Some(self.parse_statement()),
-            Err(msg) => Some(self.error(msg.clone())),
+            Err(msg) => Some(Err(msg.clone())),
             Ok(None) => None,
         }
     }
@@ -543,11 +543,11 @@ impl<'a> Parser<'a> {
     fn expect(&mut self, expected: TokenType) -> ParseResult<Token> {
         match &self.next_token()? {
             Some(tok) if tok.typ == expected => Ok(tok.clone()),
-            Some(Token { typ, position, .. }) => self.error(format!(
+            Some(Token { typ, position, .. }) => Err(format!(
                 "Expected {:?}, got {:?} at {}",
                 expected, typ, position
             )),
-            None => self.error(format!("Expected {:?}, found end of input", expected)),
+            None => Err(format!("Expected {:?}, found end of input", expected)),
         }
     }
 
@@ -785,7 +785,7 @@ impl<'a> Parser<'a> {
 
         match decl.value {
             StatementKind::Function { .. } | StatementKind::Let { .. } => {}
-            _ => return self.error("Can only export declarations".to_string()),
+            _ => return Err("Can only export declarations".to_string()),
         }
 
         Ok(Statement {
@@ -800,7 +800,7 @@ impl<'a> Parser<'a> {
 
         let idx = match filename.value {
             ExpressionKind::String(idx) => idx,
-            _ => return self.error("Import filename must be a string literal".to_string()),
+            _ => return Err("Import filename must be a string literal".to_string()),
         };
 
         self.expect(TokenType::Semicolon)?;
@@ -872,7 +872,7 @@ impl<'a> Parser<'a> {
             }
             TokenType::Function => self.parse_function_expression(token),
 
-            _ => self.error(format!(
+            _ => Err(format!(
                 "Unexpected token {:?} at {}",
                 token.typ, token.position
             )),
@@ -902,7 +902,7 @@ impl<'a> Parser<'a> {
             TokenType::LeftParen => self.parse_call_expression(token, left),
             TokenType::LeftBracket => self.parse_index_expression(token, left),
 
-            _ => self.error(format!(
+            _ => Err(format!(
                 "Unexpected token {:?} at {}",
                 token.typ, token.position
             )),
@@ -1451,7 +1451,7 @@ function test(
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
-            vec![Err("Expected Semicolon, found end of input".to_string()),],
+            vec![Err("Error in test: Expected Semicolon, found end of input".to_string()),],
         );
     }
 
@@ -1464,7 +1464,7 @@ function test(
 
         assert_eq!(
             parser.next().unwrap(),
-            Err("Expected Identifier, got While at 1:5".to_string()),
+            Err("Error in test: Expected Identifier, got While at 1:5".to_string()),
         );
     }
 
@@ -1931,7 +1931,7 @@ return 1;
                         },
                     })),
                 }),
-                Err("Can only export declarations".to_string()),
+                Err("Error in test: Can only export declarations".to_string()),
             ]
         );
     }
@@ -1955,13 +1955,13 @@ return 1;
     #[test]
     fn test_import_statement_non_string() {
         let mut agent = Agent::new();
-        let input = r#"import abc;"#;
+        let input = r#"import abc"#;
         let lexer = Lexer::new("test", input);
         let parser = Parser::new("test", &mut agent, lexer);
 
         assert_eq!(
             parser.collect::<Vec<_>>(),
-            vec![Err("Import filename must be a string literal".to_string())]
+            vec![Err("Error in test: Import filename must be a string literal".to_string())]
         );
     }
 
