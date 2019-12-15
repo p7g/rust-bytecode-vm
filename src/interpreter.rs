@@ -800,6 +800,11 @@ impl<'a> Interpreter<'a> {
                     let module = module.unwrap();
                     self.agent.modules.insert(module.name(), module);
                 }
+
+                OpCode::Dup => {
+                    let value = top!().clone();
+                    push!(value);
+                }
             }
         }
 

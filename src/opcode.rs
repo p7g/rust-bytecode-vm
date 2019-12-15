@@ -54,6 +54,7 @@ pub enum OpCode {
     Neg,
     InitModule,
     EndModule,
+    Dup,
 }
 
 impl Into<u8> for OpCode {

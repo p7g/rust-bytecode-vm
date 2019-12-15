@@ -319,6 +319,10 @@ impl Bytecode {
         self.op(OpCode::EndModule)
     }
 
+    pub fn dup(&mut self) -> &mut Bytecode {
+        self.op(OpCode::Dup)
+    }
+
     pub fn into<T>(self) -> T
     where
         T: std::convert::From<std::vec::Vec<u8>>,

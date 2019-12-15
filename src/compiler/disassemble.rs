@@ -111,7 +111,8 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::LeftShift
             | OpCode::RightShift
             | OpCode::Neg
-            | OpCode::EndModule => println!("{:?}", instruction),
+            | OpCode::EndModule
+            | OpCode::Dup => println!("{:?}", instruction),
         }
     }
 

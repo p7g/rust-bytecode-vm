@@ -857,6 +857,24 @@ impl<'a> CodeGen<'a> {
                     }
                 }
 
+                TokenType::AndAnd | TokenType::PipePipe => {
+                    self.compile_expression(state, left)?;
+                    let end = self.bytecode.new_label();
+
+                    self.bytecode
+                        .dup()
+                        .op(match op {
+                            TokenType::AndAnd => OpCode::JumpIfFalse,
+                            TokenType::PipePipe => OpCode::JumpIfTrue,
+                            _ => unreachable!(),
+                        })
+                        .address_of_auto(end)
+                        .pop();
+
+                    self.compile_expression(state, right)?;
+                    self.bytecode.mark_label(end);
+                }
+
                 _ => unreachable!(),
             }
 
@@ -1511,5 +1529,45 @@ mod tests {
             .pop()
             .end_module();
         test_statement!("~1 < 2 == !false;", bc, agent)
+    }
+
+    #[test]
+    fn test_andand() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.init_module(ident_test)
+            .const_int(123)
+            .dup()
+            .op(OpCode::JumpIfFalse)
+            .address_of("end")
+            .pop()
+            .const_int(234)
+            .label("end")
+            .pop()
+            .end_module();
+
+        test_statement!("123 && 234;", bc, agent)
+    }
+
+    #[test]
+    fn test_pipepipe() -> Result<(), String> {
+        let mut agent = Agent::new();
+        let ident_test = agent.intern_string("test");
+
+        let mut bc = Bytecode::new();
+        bc.init_module(ident_test)
+            .const_int(123)
+            .dup()
+            .op(OpCode::JumpIfTrue)
+            .address_of("end")
+            .pop()
+            .const_int(234)
+            .label("end")
+            .pop()
+            .end_module();
+
+        test_statement!("123 || 234;", bc, agent)
     }
 }
