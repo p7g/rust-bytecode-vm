@@ -1,9 +1,35 @@
 module String;
 
+import "array.rbcvm";
+
 export function chars(str) {
   return string_chars(str);
 }
 
 export function bytes(str) {
   return string_bytes(str);
+}
+
+export function parse_number(str, base) {
+  let sum = 0;
+  let cs = chars(str);
+  Array.reverse(cs);
+
+  Array.foreach(cs, function(char, i) {
+    if is_digit(char) {
+      sum = sum + to_digit(char) * base ** i;
+    }
+  });
+
+  return sum;
+}
+
+export function to_digit(char) {
+  return ord(char) - 48;
+}
+
+export function is_digit(char) {
+  let charcode = ord(char);
+
+  return charcode >= 48 && charcode <= 57;
 }

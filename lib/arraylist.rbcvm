@@ -41,7 +41,13 @@ export function delete(self, index) {
 }
 
 export function to_array(self) {
-  return Array.map(self[1], function(v) { return v; });
+  let new_array = Array.new(self[0]);
+
+  foreach(self, function(val, i) {
+    new_array[i] = val;
+  });
+
+  return new_array;
 }
 
 export function push(self, value) {

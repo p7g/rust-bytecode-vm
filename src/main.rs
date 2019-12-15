@@ -75,6 +75,20 @@ fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Value {
     }
 }
 
+fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    let mut buf = String::new();
+
+    for arg in args {
+        if let Value::String(s) = arg {
+            buf += &s;
+        } else {
+            panic!("Expected string");
+        }
+    }
+
+    Value::String(buf)
+}
+
 fn ord(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::String(s)) = args.get(0) {
         if let Some(c) = s.chars().next() {
@@ -111,108 +125,44 @@ fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Value {
     }
 }
 
+fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Value {
+    if let Some(Value::String(s)) = args.first() {
+        Value::from(std::fs::read_to_string(s).expect("Failed to read file"))
+    } else {
+        panic!("Expected string");
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut agent = Agent::new();
     let mut global = HashMap::new();
 
-    global.insert(
-        agent.intern_string("print"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("print")),
-            arity: 1,
-            function: print,
-        }),
-    );
+    macro_rules! add_global {
+        ($name:ident, $arity:expr) => {{
+            global.insert(
+                agent.intern_string(stringify!($name)),
+                Value::Function(FunctionValue::Builtin {
+                    name: Some(agent.intern_string(stringify!($name))),
+                    arity: $arity,
+                    function: $name,
+                }),
+            );
+        }};
+    }
 
-    global.insert(
-        agent.intern_string("println"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("println")),
-            arity: 1,
-            function: println,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("tostring"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("tostring")),
-            arity: 1,
-            function: tostring,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("typeof"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("typeof")),
-            arity: 1,
-            function: type_of,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("array_new"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("array_new")),
-            arity: 1,
-            function: array_new,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("array_length"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("array_length")),
-            arity: 1,
-            function: array_length,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("string_chars"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("string_chars")),
-            arity: 1,
-            function: string_chars,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("string_bytes"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("string_bytes")),
-            arity: 1,
-            function: string_bytes,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("chr"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("chr")),
-            arity: 1,
-            function: chr,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("ord"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("ord")),
-            arity: 1,
-            function: ord,
-        }),
-    );
-
-    global.insert(
-        agent.intern_string("truncate32"),
-        Value::Function(FunctionValue::Builtin {
-            name: Some(agent.intern_string("truncate32")),
-            arity: 1,
-            function: truncate32,
-        }),
-    );
+    add_global!(print, 1);
+    add_global!(println, 1);
+    add_global!(tostring, 1);
+    add_global!(type_of, 1);
+    add_global!(array_new, 1);
+    add_global!(array_length, 1);
+    add_global!(string_chars, 1);
+    add_global!(string_bytes, 1);
+    add_global!(string_concat, 0);
+    add_global!(chr, 1);
+    add_global!(ord, 1);
+    add_global!(truncate32, 1);
+    add_global!(read_file, 1);
 
     let mut compiler = Compiler::new(&mut agent);
 

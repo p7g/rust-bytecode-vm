@@ -44,3 +44,15 @@ export function map(self, func) {
 
   return new_array;
 }
+
+export function reverse(self) {
+  let len = length(self);
+  let half = len / 2;
+
+  let tmp;
+  for let i = 0; i <= half; i = i + 1 {
+    tmp = self[i];
+    self[i] = self[len - i - 1];
+    self[len - i - 1] = tmp;
+  }
+}

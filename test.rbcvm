@@ -174,5 +174,31 @@ Pointer :   ^
 >++.                    And finally a newline from Cell #6
 ";
 
-let parsed = bf_parse(prog);
-bf_run(parsed);
+# let parsed = bf_parse(prog);
+# bf_run(parsed);
+
+import "lib/json.rbcvm";
+
+function main() {
+  let json = JSON.parse(read_file("1.json"));
+
+  let coordinates = HashMap.get(json, "coordinates");
+  let len = Array.length(coordinates);
+  let x = 0;
+  let y = 0;
+  let z = 0;
+
+  let coord;
+  for let i = 0; i < len; i = i + 1 {
+    coord = coordinates[i];
+    x = x + HashMap.get(coord, "x");
+    y = y + HashMap.get(coord, "y");
+    z = z + HashMap.get(coord, "z");
+  }
+
+  println(x / len);
+  println(y / len);
+  println(z / len);
+}
+
+main();
