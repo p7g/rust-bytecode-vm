@@ -4,6 +4,7 @@ import "lib/array.rbcvm";
 import "lib/arraylist.rbcvm";
 import "lib/hash.rbcvm";
 import "lib/hashmap.rbcvm";
+import "lib/result.rbcvm";
 import "lib/string.rbcvm";
 
 function tape_new() {
@@ -179,8 +180,15 @@ Pointer :   ^
 
 import "lib/json.rbcvm";
 
+let file_contents = read_file("1.json");
+
 function main() {
-  let json = JSON.parse(read_file("1.json"));
+  let json = JSON.parse(file_contents);
+  if Result.is_error(json) {
+    return json;
+  } else {
+    json = Result.data(json);
+  }
 
   let coordinates = HashMap.get(json, "coordinates");
   let len = Array.length(coordinates);
