@@ -25,6 +25,13 @@ impl Bytecode {
         self.instructions.len() - 1
     }
 
+    pub fn update_usize(&mut self, position: usize, new_value: usize) {
+        let bytes = usize::to_le_bytes(new_value);
+
+        self.instructions[position..(position + std::mem::size_of::<usize>())]
+            .clone_from_slice(&bytes);
+    }
+
     pub fn new_label(&mut self) -> usize {
         self.label_addresses_auto.push(None);
         self.label_addresses_auto.len() - 1
@@ -325,6 +332,10 @@ impl Bytecode {
 
     pub fn dup(&mut self) -> &mut Bytecode {
         self.op(OpCode::Dup)
+    }
+
+    pub fn allocate_locals(&mut self, count: usize) -> &mut Self {
+        self.op(OpCode::AllocateLocals).usize(count)
     }
 
     pub fn into<T>(self) -> T

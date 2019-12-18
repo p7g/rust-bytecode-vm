@@ -42,13 +42,11 @@ function tokenize(input) {
   let chars = String.chars(input);
   let tokens = ArrayList.new();
   let len = Array.length(chars);
-  let char;
-  let token;
-  let str;
   let i = 0;
 
   while i < len {
-    char = chars[i];
+    let char = chars[i];
+    let token;
 
     if char == " "
         || char == "\n"
@@ -94,7 +92,7 @@ function tokenize(input) {
       token = token_new(T_NULL, "null");
       i = i + 4;
     } else if char == "\"" {
-      str = "";
+      let str = "";
       i = i + 1;
 
       while i < len && chars[i] != "\"" {
@@ -105,7 +103,7 @@ function tokenize(input) {
       i = i + 1;
       token = token_new(T_STRING, str);
     } else if String.is_digit(char) {
-      str = char;
+      let str = char;
       i = i + 1;
 
       while i < len && String.is_digit(chars[i]) {
@@ -130,14 +128,6 @@ function parse_value(next, peek) {
   let value = token[TOK_VALUE];
 
   let ret;
-  let result;
-  let comma;
-  let colon;
-  let key;
-  let map_value;
-  let values;
-  let is_first;
-
   if type == T_NUMBER {
     ret = String.parse_number(value, 10);
   } else if type == T_STRING {
@@ -149,12 +139,12 @@ function parse_value(next, peek) {
   } else if type == T_NULL {
     ret = null;
   } else if type == T_LEFT_BRACE {
-    values = HashMap.new();
-    is_first = true;
+    let values = HashMap.new();
+    let is_first = true;
 
     while peek()[TOK_TYPE] != T_RIGHT_BRACE {
       if !is_first {
-        comma = next();
+        let comma = next();
         if comma[TOK_TYPE] != T_COMMA {
           return error(
             E_UNEXPECTED_TOKEN,
@@ -165,7 +155,7 @@ function parse_value(next, peek) {
         is_first = false;
       }
 
-      key = parse_value(next, peek);
+      let key = parse_value(next, peek);
 
       if Result.is_ok(key) {
         key = Result.data(key);
@@ -178,7 +168,7 @@ function parse_value(next, peek) {
         return result;
       }
 
-      colon = next();
+      let colon = next();
       if colon[TOK_TYPE] != T_COLON {
         return error(
           E_UNEXPECTED_TOKEN,
@@ -186,7 +176,7 @@ function parse_value(next, peek) {
         );
       }
 
-      map_value = parse_value(next, peek);
+      let map_value = parse_value(next, peek);
 
       if Result.is_ok(map_value) {
         HashMap.set(values, key, Result.data(map_value));
@@ -199,12 +189,12 @@ function parse_value(next, peek) {
 
     ret = values;
   } else if type == T_LEFT_BRACKET {
-    values = ArrayList.new();
+    let values = ArrayList.new();
 
-    is_first = true;
+    let is_first = true;
     while peek()[TOK_TYPE] != T_RIGHT_BRACKET {
       if !is_first {
-        comma = next();
+        let comma = next();
         if comma[TOK_TYPE] != T_COMMA {
           return error(
             E_UNEXPECTED_TOKEN,
@@ -215,7 +205,7 @@ function parse_value(next, peek) {
         is_first = false;
       }
 
-      result = parse_value(next, peek);
+      let result = parse_value(next, peek);
 
       if Result.is_ok(result) {
         ArrayList.push(values, Result.data(result));

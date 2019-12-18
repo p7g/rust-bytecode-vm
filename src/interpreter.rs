@@ -267,7 +267,9 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::ConstDouble => {
-                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(usize))),));
+                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(
+                        usize
+                    ))),));
                 }
 
                 OpCode::ConstNull => {
@@ -824,6 +826,14 @@ impl<'a> Interpreter<'a> {
                 OpCode::Dup => {
                     let value = top!().clone();
                     push!(value);
+                }
+
+                OpCode::AllocateLocals => {
+                    let count = usize::from_le_bytes(next!(usize));
+
+                    for _ in 0..count {
+                        push!(Value::Null);
+                    }
                 }
             }
         }

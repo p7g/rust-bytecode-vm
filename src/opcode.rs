@@ -55,6 +55,7 @@ pub enum OpCode {
     InitModule,
     EndModule,
     Dup,
+    AllocateLocals,
 }
 
 impl Into<u8> for OpCode {

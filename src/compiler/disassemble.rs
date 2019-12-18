@@ -55,8 +55,13 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::LoadArgument
             | OpCode::StoreArgument
             | OpCode::NewArray
-            | OpCode::NewArrayWithValues => {
-                println!("{:?}({:?})", instruction, usize::from_le_bytes(next!(8)));
+            | OpCode::NewArrayWithValues
+            | OpCode::AllocateLocals => {
+                println!(
+                    "{:?}({:?})",
+                    instruction,
+                    usize::from_le_bytes(next!(usize))
+                );
             }
 
             OpCode::LoadGlobal

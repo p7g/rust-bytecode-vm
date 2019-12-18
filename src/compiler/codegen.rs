@@ -72,13 +72,13 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn push_binding(&mut self, typ: BindingType, name: usize) {
-        self.bindings.push(Binding {
-            name,
-            typ,
-            index: self.binding_count[typ as usize],
-        });
+    pub fn push_binding(&mut self, typ: BindingType, name: usize) -> usize {
+        let index = self.binding_count[typ as usize];
+
+        self.bindings.push(Binding { name, typ, index });
         self.binding_count[typ as usize] += 1;
+
+        index
     }
 
     pub fn has_binding(&self, name: usize) -> bool {
@@ -238,7 +238,8 @@ impl<'a> CodeGen<'a> {
                     .store_global(*name)
                     .pop();
             } else if let Some(scope) = &mut state.scope {
-                scope.push_binding(BindingType::Local, *name);
+                let index = scope.push_binding(BindingType::Local, *name);
+                self.bytecode.store_local(index);
             } else {
                 return Err("Binding let value outside global scope with no scope".to_string());
             }
@@ -294,10 +295,17 @@ impl<'a> CodeGen<'a> {
 
         self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
         self.bytecode.mark_label(start_label);
+        let local_count_pos = self.bytecode.position();
+        self.bytecode.allocate_locals(0);
 
         for statement in body {
             self.compile_statement(&mut inner_state, &statement)?;
         }
+
+        self.bytecode.update_usize(
+            local_count_pos + 2,
+            inner_state.scope.as_ref().unwrap().binding_count[BindingType::Local as usize],
+        );
 
         // always add return null at the end of a function... this kinda sucks,
         // but the alternative is a bunch of complicated logic to check if there
@@ -1039,6 +1047,7 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("start")
+            .allocate_locals(0)
             .const_null()
             .ret()
             .label("end")
@@ -1284,7 +1293,9 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("test")
+            .allocate_locals(1)
             .const_null()
+            .store_local(0)
             .load_local(0)
             .ret()
             .const_null()
@@ -1327,6 +1338,7 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("test")
+            .allocate_locals(0)
             .load_argument(0)
             .ret()
             .const_null()
@@ -1352,13 +1364,16 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("test")
+            .allocate_locals(1)
             .const_null()
+            .store_local(0)
             .op(OpCode::NewFunction)
             .usize(0)
             .address_of("inner")
             .op(OpCode::Jump)
             .address_of("inner_end")
             .label("inner")
+            .allocate_locals(0)
             .load_upvalue(0)
             .ret()
             .const_null()
@@ -1473,6 +1488,7 @@ mod tests {
             .op(OpCode::Jump)
             .address_of("end")
             .label("func")
+            .allocate_locals(0)
             .const_null()
             .ret()
             .label("end")
