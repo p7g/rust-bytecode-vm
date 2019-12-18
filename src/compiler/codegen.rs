@@ -264,17 +264,22 @@ impl<'a> CodeGen<'a> {
             .usize(parameters.len()) // FIXME: This probably won't work with varargs
             .address_of_auto(start_label);
 
-        if let Some(name) = name {
+        let local_index = if let Some(name) = name {
             if state.is_global {
                 self.bytecode.declare_global(name).store_global(name).pop();
+                None
             } else {
-                state
-                    .scope
-                    .as_mut()
-                    .ok_or_else(|| "Missing scope in local scope".to_string())?
-                    .push_binding(BindingType::Local, name);
+                Some(
+                    state
+                        .scope
+                        .as_mut()
+                        .ok_or_else(|| "Missing scope in local scope".to_string())?
+                        .push_binding(BindingType::Local, name),
+                )
             }
-        }
+        } else {
+            None
+        };
 
         let mut inner_scope = Scope::new(state.scope.as_ref());
 
@@ -342,6 +347,10 @@ impl<'a> CodeGen<'a> {
             } else {
                 unreachable!();
             }
+        }
+
+        if let Some(index) = local_index {
+            self.bytecode.store_local(index);
         }
 
         Ok(())
