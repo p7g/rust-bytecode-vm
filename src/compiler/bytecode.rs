@@ -21,6 +21,10 @@ impl Bytecode {
         }
     }
 
+    pub fn position(&self) -> usize {
+        self.instructions.len() - 1
+    }
+
     pub fn new_label(&mut self) -> usize {
         self.label_addresses_auto.push(None);
         self.label_addresses_auto.len() - 1

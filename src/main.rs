@@ -1,8 +1,8 @@
 #![allow(dead_code)] // FIXME: enable this again once things are stable
 
 mod agent;
-#[macro_use]
 mod compiler;
+mod debuginfo;
 mod interpreter;
 mod module;
 mod opcode;
@@ -47,7 +47,7 @@ fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::Integer(n)) = args.get(0) {
         Value::from(vec![Value::Null; *n as usize])
     } else {
-        panic!("Expected int");
+        panic!("array_new: Expected int");
     }
 }
 
@@ -59,7 +59,7 @@ fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Value {
                 .collect::<Vec<_>>(),
         )
     } else {
-        panic!("Expected string");
+        panic!("string_chars: Expected string");
     }
 }
 
@@ -71,7 +71,7 @@ fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Value {
                 .collect::<Vec<_>>(),
         )
     } else {
-        panic!("Expected string");
+        panic!("string_bytes: Expected string");
     }
 }
 
@@ -82,7 +82,7 @@ fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Value {
         if let Value::String(s) = arg {
             buf += &s;
         } else {
-            panic!("Expected string");
+            panic!("string_concat: Expected string");
         }
     }
 
@@ -94,10 +94,10 @@ fn ord(_: &mut Interpreter, args: Vec<Value>) -> Value {
         if let Some(c) = s.chars().next() {
             Value::from(c as i64)
         } else {
-            panic!("Expected string with length 1, got {:?}", s);
+            panic!("ord: Expected string with length 1, got {:?}", s);
         }
     } else {
-        panic!("Expected string with length 1");
+        panic!("ord: Expected string with length 1");
     }
 }
 
@@ -105,7 +105,7 @@ fn chr(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::Integer(n)) = args.get(0) {
         Value::from((*n as u8 as char).to_string())
     } else {
-        panic!("Expected integer");
+        panic!("chr: Expected integer");
     }
 }
 
@@ -113,7 +113,7 @@ fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::Array(vs)) = args.get(0) {
         Value::from(vs.borrow().len() as i64)
     } else {
-        panic!("Expected array");
+        panic!("array_length: Expected array");
     }
 }
 
@@ -121,7 +121,7 @@ fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::Integer(i)) = args.get(0) {
         Value::from(i64::from(*i as u32))
     } else {
-        panic!("Expected integer");
+        panic!("truncate32: Expected integer");
     }
 }
 
@@ -129,7 +129,7 @@ fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Value {
     if let Some(Value::String(s)) = args.first() {
         Value::from(std::fs::read_to_string(s).expect("Failed to read file"))
     } else {
-        panic!("Expected string");
+        panic!("read_file: Expected string");
     }
 }
 
@@ -170,9 +170,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filename = args.get(1).expect("Expected filename");
 
     compiler.compile_file(std::env::current_dir()?, filename)?;
-    let code = compiler.code();
+    let (code, debuginfo) = compiler.end();
 
     let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
+    interpreter.set_debuginfo(&debuginfo);
     interpreter.evaluate(code.unwrap())?;
 
     Ok(())

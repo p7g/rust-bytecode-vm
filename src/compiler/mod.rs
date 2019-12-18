@@ -11,6 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::agent::Agent;
+use crate::debuginfo::DebugInfo;
 
 use bytecode::Bytecode;
 
@@ -20,6 +21,7 @@ pub(crate) struct Compiler<'a> {
     agent: &'a mut Agent,
     bytecode: Option<Bytecode>,
     compiled_modules: HashSet<String>,
+    pub(crate) debuginfo: DebugInfo,
 }
 
 impl<'a> Compiler<'a> {
@@ -28,11 +30,12 @@ impl<'a> Compiler<'a> {
             agent,
             bytecode: Some(Bytecode::new()),
             compiled_modules: HashSet::new(),
+            debuginfo: DebugInfo::new(),
         }
     }
 
-    pub(crate) fn code(self) -> Option<Vec<u8>> {
-        self.bytecode.map(Bytecode::into)
+    pub(crate) fn end(self) -> (Option<Vec<u8>>, DebugInfo) {
+        (self.bytecode.map(Bytecode::into), self.debuginfo)
     }
 
     pub(crate) fn compile_file<T, U>(&mut self, pwd: U, path: T) -> Result
@@ -79,7 +82,11 @@ impl<'a> Compiler<'a> {
         self.agent
             .modules
             .insert(parsed_module.spec.name, parsed_module.spec.clone());
-        let gen = codegen::CodeGen::with_bytecode(self.agent, self.bytecode.take().unwrap());
+        let gen = codegen::CodeGen::with_bytecode(
+            self.agent,
+            &mut self.debuginfo,
+            self.bytecode.take().unwrap(),
+        );
 
         self.bytecode
             .replace(gen.compile(parsed_module.spec, parsed_module.statements.iter())?);

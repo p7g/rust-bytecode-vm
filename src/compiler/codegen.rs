@@ -1,6 +1,7 @@
 use crate::agent::Agent;
 use crate::compiler::bytecode::Bytecode;
 use crate::compiler::parser::{Expression, ExpressionKind, Statement, StatementKind, TokenType};
+use crate::debuginfo::{self, DebugInfo};
 use crate::module::ModuleSpec;
 use crate::opcode::OpCode;
 
@@ -47,13 +48,14 @@ enum BindingType {
     Local,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Binding {
     typ: BindingType,
     name: usize,
     index: usize,
 }
 
+#[derive(Debug)]
 struct Scope<'a> {
     parent: Option<&'a Scope<'a>>,
     // index of vec is the location on the stack where the binding lives
@@ -147,21 +149,34 @@ impl<'a> CompilerState<'a> {
     }
 }
 
-pub struct CodeGen<'a> {
+pub(crate) struct CodeGen<'a> {
     bytecode: Bytecode,
     agent: &'a mut Agent,
+    debuginfo: &'a mut DebugInfo,
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(agent: &'a mut Agent) -> Self {
-        Self::with_bytecode(agent, Bytecode::new())
+    pub(crate) fn new(agent: &'a mut Agent, debuginfo: &'a mut DebugInfo) -> Self {
+        Self::with_bytecode(agent, debuginfo, Bytecode::new())
     }
 
-    pub fn with_bytecode(agent: &'a mut Agent, bytecode: Bytecode) -> Self {
-        Self { agent, bytecode }
+    pub(crate) fn with_bytecode(
+        agent: &'a mut Agent,
+        debuginfo: &'a mut DebugInfo,
+        bytecode: Bytecode,
+    ) -> Self {
+        Self {
+            agent,
+            bytecode,
+            debuginfo,
+        }
     }
 
-    pub fn compile<'b, T>(mut self, module: ModuleSpec, statements: T) -> CompileResult<Bytecode>
+    pub(crate) fn compile<'b, T>(
+        mut self,
+        module: ModuleSpec,
+        statements: T,
+    ) -> CompileResult<Bytecode>
     where
         T: Iterator<Item = &'b Statement>,
     {
@@ -596,7 +611,8 @@ impl<'a> CodeGen<'a> {
         state: &mut CompilerState,
         expression: &Expression,
     ) -> CompileResult<()> {
-        match expression.value {
+        let start = self.bytecode.position();
+        let result = match expression.value {
             ExpressionKind::Identifier(_) => self.compile_identifier_expression(state, expression),
             ExpressionKind::Integer(_) => self.compile_integer_expression(state, expression),
             ExpressionKind::Double(_) => self.compile_double_expression(state, expression),
@@ -613,7 +629,16 @@ impl<'a> CodeGen<'a> {
             }
             ExpressionKind::Call(..) => self.compile_call_expression(state, expression),
             ExpressionKind::Index(..) => self.compile_index_expression(state, expression),
-        }
+        };
+
+        self.debuginfo.insert(
+            start..self.bytecode.position(),
+            debuginfo::Context {
+                position: expression.position,
+            },
+        );
+
+        result
     }
 
     fn compile_identifier_expression(
@@ -951,7 +976,8 @@ mod tests {
             };
             let name = agent.intern_string("test");
 
-            let compiler = CodeGen::new(&mut agent);
+            let mut debuginfo = DebugInfo::new();
+            let compiler = CodeGen::new(&mut agent, &mut debuginfo);
             let bytecode: Vec<u8> = compiler.compile(ModuleSpec::new(name), ast.iter())?.into();
 
             let expected: Vec<u8> = $expected.into();

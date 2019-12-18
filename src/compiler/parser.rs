@@ -332,6 +332,7 @@ impl<'a> Lexer<'a> {
                                 if let Some(c) = self.next_char() {
                                     match c {
                                         'n' => buf.push('\n'),
+                                        'r' => buf.push('\r'),
                                         't' => buf.push('\t'),
                                         '"' => buf.push('"'),
                                         _ => return error!("unrecognized escape sequence"),

@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::agent::Agent;
 use crate::compiler::disassemble::disassemble;
+use crate::debuginfo::DebugInfo;
 use crate::module::Module;
 use crate::opcode::OpCode;
 use crate::value::{FunctionValue, Upvalue, Value};
@@ -33,6 +34,7 @@ pub struct Interpreter<'a> {
     ip: usize,
     bp: usize,
     sp: usize,
+    debuginfo: Option<&'a DebugInfo>,
 }
 
 impl<'a> Interpreter<'a> {
@@ -54,7 +56,12 @@ impl<'a> Interpreter<'a> {
             ip: 0,
             bp: 0,
             sp: 0,
+            debuginfo: None,
         }
+    }
+
+    pub(crate) fn set_debuginfo(&mut self, debuginfo: &'a DebugInfo) {
+        self.debuginfo.replace(debuginfo);
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -222,9 +229,10 @@ impl<'a> Interpreter<'a> {
         macro_rules! error {
             ($msg:expr) => {{
                 Err(format!(
-                    "Error in {}: {}",
+                    "Error in {}: {}\n{:#?}",
                     self.agent.string_table[current_module!().unwrap().name()].clone(),
-                    $msg
+                    $msg,
+                    self.debuginfo.map(|d| d.get(self.ip)),
                 ))
             }};
         }
@@ -235,6 +243,17 @@ impl<'a> Interpreter<'a> {
                 print_stack!(&self.stack);
                 println!("{:?}", OpCode::from(instruction));
                 println!("ip: {} sp: {} bp: {}", self.ip, self.sp, self.bp);
+                println!(
+                    "{} {:?}",
+                    if let Some(m) = current_module!() {
+                        self.agent.string_table[m.name()].clone()
+                    } else {
+                        "No module".to_string()
+                    },
+                    self.debuginfo
+                        .and_then(|d| d.get(self.ip))
+                        .map(|d| d.position)
+                );
             }
 
             match OpCode::from(instruction) {
