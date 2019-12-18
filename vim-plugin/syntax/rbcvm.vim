@@ -38,7 +38,7 @@ syntax keyword jsBooleanFalse   false
 
 " Modules
 syntax keyword jsImport                       import skipwhite skipempty nextgroup=jsString
-syntax keyword jsExport                       export skipwhite skipempty nextgroup=jsFunction,jsVariableDef
+syntax keyword jsExport                       export skipwhite skipempty nextgroup=jsFunction,jsStorageClass
 syntax keyword rbcvmModule module skipwhite skipempty
 
 " Strings, Templates, Numbers
