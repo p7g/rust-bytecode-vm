@@ -10,6 +10,9 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             ip += 1;
             inst
         }};
+        ($type:ty) => {
+            next!(std::mem::size_of::<$type>())
+        };
         ($count:expr) => {{
             let mut arr = [0u8; $count];
 
@@ -27,14 +30,14 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
         let instruction = OpCode::from(instruction);
         match instruction {
             OpCode::ConstInt => {
-                println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(8)));
+                println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(usize)));
             }
 
             OpCode::ConstDouble => {
                 println!(
                     "{:?}({:?})",
                     instruction,
-                    f64::from_bits(u64::from_le_bytes(next!(8))),
+                    f64::from_bits(u64::from_le_bytes(next!(usize))),
                 );
             }
 
@@ -61,7 +64,7 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::StoreGlobal
             | OpCode::ConstString
             | OpCode::InitModule => {
-                let idx = usize::from_le_bytes(next!(8));
+                let idx = usize::from_le_bytes(next!(usize));
                 println!("{:?}({} ({}))", instruction, agent.string_table[idx], idx,);
             }
 
@@ -69,8 +72,8 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
                 println!(
                     "{:?}({}.{})",
                     instruction,
-                    agent.string_table[usize::from_le_bytes(next!(8))],
-                    agent.string_table[usize::from_le_bytes(next!(8))],
+                    agent.string_table[usize::from_le_bytes(next!(usize))],
+                    agent.string_table[usize::from_le_bytes(next!(usize))],
                 );
             }
 
@@ -78,8 +81,8 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
                 println!(
                     "{:?}({:?}, {:?})",
                     instruction,
-                    usize::from_le_bytes(next!(8)),
-                    usize::from_le_bytes(next!(8)),
+                    usize::from_le_bytes(next!(usize)),
+                    usize::from_le_bytes(next!(usize)),
                 );
             }
 

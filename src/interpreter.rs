@@ -105,6 +105,9 @@ impl<'a> Interpreter<'a> {
                 self.ip += 1;
                 inst
             }};
+            ($type:ty) => {
+                next!(std::mem::size_of::<$type>())
+            };
             ($expr:expr) => {{
                 let mut array = [0u8; $expr];
 
@@ -260,11 +263,11 @@ impl<'a> Interpreter<'a> {
                 OpCode::Halt => break,
 
                 OpCode::ConstInt => {
-                    push!(Value::from(i64::from_le_bytes(next!(8))));
+                    push!(Value::from(i64::from_le_bytes(next!(usize))));
                 }
 
                 OpCode::ConstDouble => {
-                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(8))),));
+                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(usize))),));
                 }
 
                 OpCode::ConstNull => {
@@ -280,7 +283,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::ConstString => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     push!(Value::from(self.agent.string_table[idx].as_ref()));
                 }
 
@@ -299,11 +302,11 @@ impl<'a> Interpreter<'a> {
                 ),
 
                 OpCode::Jump => {
-                    self.ip = usize::from_le_bytes(next!(8));
+                    self.ip = usize::from_le_bytes(next!(usize));
                 }
 
                 OpCode::JumpIfTrue => {
-                    let to = usize::from_le_bytes(next!(8));
+                    let to = usize::from_le_bytes(next!(usize));
                     let cond = pop!();
                     if cond.is_truthy() {
                         self.ip = to;
@@ -311,7 +314,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::JumpIfFalse => {
-                    let to = usize::from_le_bytes(next!(8));
+                    let to = usize::from_le_bytes(next!(usize));
                     let cond = pop!();
                     if !cond.is_truthy() {
                         self.ip = to;
@@ -320,7 +323,7 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::Call => {
                     let function = pop!();
-                    let num_args = usize::from_le_bytes(next!(8));
+                    let num_args = usize::from_le_bytes(next!(usize));
                     if let Value::Function(f) = &function {
                         macro_rules! ensure_arity {
                             ($arity:expr, $name:expr) => {{
@@ -406,16 +409,16 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadLocal => {
-                    push!(locals![usize::from_le_bytes(next!(8))].clone());
+                    push!(locals![usize::from_le_bytes(next!(usize))].clone());
                 }
 
                 OpCode::StoreLocal => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     locals![idx] = top!().clone();
                 }
 
                 OpCode::LoadGlobal => {
-                    let id = usize::from_le_bytes(next!(8));
+                    let id = usize::from_le_bytes(next!(usize));
 
                     if let Some(module) = current_module!() {
                         if let Some(val) = module.global_scope.get(&id) {
@@ -432,7 +435,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::DeclareGlobal => {
-                    let id = usize::from_le_bytes(next!(8));
+                    let id = usize::from_le_bytes(next!(usize));
 
                     if let Some(module) = current_module!() {
                         module.global_scope.insert(id, Value::Null);
@@ -442,7 +445,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::StoreGlobal => {
-                    let id = usize::from_le_bytes(next!(8));
+                    let id = usize::from_le_bytes(next!(usize));
 
                     if let Some(module) = current_module!() {
                         if module.global_scope.contains_key(&id) {
@@ -459,8 +462,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::NewFunction => {
-                    let arity = usize::from_le_bytes(next!(8));
-                    let address = usize::from_le_bytes(next!(8));
+                    let arity = usize::from_le_bytes(next!(usize));
+                    let address = usize::from_le_bytes(next!(usize));
                     let module = if let Some(module) = current_module!() {
                         module.name()
                     } else {
@@ -477,7 +480,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BindLocal => {
-                    let idx = locals_index!() + usize::from_le_bytes(next!(8));
+                    let idx = locals_index!() + usize::from_le_bytes(next!(usize));
                     let mut func = pop!();
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
@@ -500,7 +503,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BindUpvalue => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     let mut func = pop!();
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
@@ -520,7 +523,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BindArgument => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     let mut func = pop!();
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
@@ -548,7 +551,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadUpvalue => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     if let Value::Function(FunctionValue::User { upvalues, .. }) =
                         &executing_function!()
                     {
@@ -564,7 +567,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::StoreUpvalue => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     if let Value::Function(FunctionValue::User { upvalues, .. }) =
                         &executing_function!()
                     {
@@ -580,18 +583,18 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadArgument => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     push!(arguments![idx].clone());
                 }
 
                 OpCode::StoreArgument => {
-                    let idx = usize::from_le_bytes(next!(8));
+                    let idx = usize::from_le_bytes(next!(usize));
                     arguments![idx] = top!().clone();
                 }
 
                 OpCode::LoadFromModule => {
-                    let module_name = usize::from_le_bytes(next!(8));
-                    let export_name = usize::from_le_bytes(next!(8));
+                    let module_name = usize::from_le_bytes(next!(usize));
+                    let export_name = usize::from_le_bytes(next!(usize));
 
                     push!(self
                         .modules
@@ -604,12 +607,12 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::NewArray => {
-                    let len = usize::from_le_bytes(next!(8));
+                    let len = usize::from_le_bytes(next!(usize));
                     push!(Value::from(vec![Value::Null; len]));
                 }
 
                 OpCode::NewArrayWithValues => {
-                    let num_values = usize::from_le_bytes(next!(8));
+                    let num_values = usize::from_le_bytes(next!(usize));
                     let mut values = Vec::with_capacity(num_values);
                     for _ in 0..num_values {
                         values.push(pop!());
@@ -801,7 +804,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::InitModule => {
-                    let name = usize::from_le_bytes(next!(8));
+                    let name = usize::from_le_bytes(next!(usize));
 
                     debug_assert!(self.current_module.is_none());
                     self.current_module = Some(Module::new(
