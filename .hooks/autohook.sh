@@ -9,8 +9,6 @@ echo_debug() { if [ "$AUTOHOOK_DEBUG" != '' ]; then >&2 echo "[DEBUG] $*"; fi; }
 repo_root() { git rev-parse --show-toplevel; }
 hooks_dir() { builtin echo "$(repo_root)/.hooks"; }
 
-pid_file="$(mktemp)"
-
 hook_types=(
     "applypatch-msg" "commit-msg" "post-applypatch" "post-checkout"
     "post-commit" "post-merge" "post-receive" "post-rewrite"
@@ -27,7 +25,7 @@ install() {
     autohook_linktarget="../../.hooks/autohook.sh"
     for hook_type in "${hook_types[@]}"; do
         hook_symlink="$hooks_dir/$hook_type"
-        if [ ! -f "$hook_symlink" ]; then
+        if [ ! -e "$hook_symlink" ]; then
             ln -s "$autohook_linktarget" "$hook_symlink"
             echo_debug "[install] linked '$autohook_linktarget' to '$hook_symlink'"
         else
@@ -80,22 +78,22 @@ run_symlinks() {
         echo_error '[run_symlinks] failed to create temp fifo dir'
         return 1
     }
+    echo_debug "[run_symlinks] made temp fifo dir '$autohook_fifo_dir'"
     autohook_stdout="$autohook_fifo_dir/stdout"
     autohook_stderr="$autohook_fifo_dir/stderr"
     if ! mkfifo "$autohook_stdout" || ! mkfifo "$autohook_stderr"; then
         echo_error '[run_symlinks] failed to create temp stderr or stdout fifo'
         rm "$autohook_stdout" "$autohook_stderr"
+        rmdir "$autohook_fifo_dir"
         return 1
     fi
-    tail -f -n +1 "$autohook_stdout" > /dev/stdout &
-    builtin echo "$!" >> "$pid_file"
-    tail -f -n +1 "$autohook_stderr" > /dev/stderr &
-    builtin echo "$!" >> "$pid_file"
+    tail -f -n +1 "$autohook_stdout" >&1 &
+    tail -f -n +1 "$autohook_stderr" >&2 &
 
     script_files=()
     while IFS='' read -r script_file; do
         script_files+=("$script_file")
-    done < <(find "$1" \( -type f -o -type l \) -maxdepth 1 | sort)
+    done < <(find "$1" -maxdepth 1 \( -type f -o -type l \) | sort)
 
     hook_type=$2
     accumulator=$3
@@ -106,9 +104,9 @@ run_symlinks() {
         number_of_symlinks=0
     fi
     echo_verbose "Found $number_of_symlinks scripts"
+    hook_exit_code=0
     if [ "$number_of_symlinks" -gt 0 ]; then
         echo_debug '[run_symlinks] had symlinks, running scripts'
-        hook_exit_code=0
         for file in "${script_files[@]}"; do
             echo_verbose "BEGIN $file"
             echo_debug "[run_symlinks] running '$file' with staged files '$accumulator'"
@@ -132,10 +130,11 @@ run_symlinks() {
             fi
             echo_verbose "FINISH $file"
         done
-        rm -rf "$autohook_fifo_dir"
-        if [ "$hook_exit_code" -ne 0 ]; then
-            exit 1
-        fi
+    fi
+    rm -rf "$autohook_fifo_dir"
+
+    if [ "$hook_exit_code" -ne 0 ]; then
+        exit 1
     fi
 }
 
@@ -199,7 +198,7 @@ USAGE
 
 main() {
     calling_file=$(basename "$0")
-    trap '{ cat "$pid_file" | xargs kill --; rm "$pid_file"; }' SIGINT SIGTERM EXIT
+    trap '[ "$(jobs -p)" != "" ] && { jobs -p | xargs kill; } >/dev/null' SIGINT SIGTERM EXIT
     echo_debug "called by '$calling_file'"
     if [ "$calling_file" == "autohook.sh" ]; then
         if [ "$1" = '-h' ]; then
