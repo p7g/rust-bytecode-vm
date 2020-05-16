@@ -124,7 +124,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn argument(&self, at: usize) -> Result<&Value, String> {
-        Ok(&self.stack[self.arguments_index()? + at])
+        Ok(&self.stack[self.arguments_index()? - at])
     }
 
     fn set_argument(&mut self, idx: usize, value: Value) -> Result<(), String> {
