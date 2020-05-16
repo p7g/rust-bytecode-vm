@@ -175,38 +175,44 @@ Pointer :   ^
 >++.                    And finally a newline from Cell #6
 ";
 
-# let parsed = bf_parse(prog);
-# bf_run(parsed);
+let warmup = "
+>++[<+++++++++++++>-]<[[>+>+<<-]>[<+>-]++++++++[>++++++++<-]>[-]<<>++++++++++[>
+++++++++++[>++++++++++[>++++++++++[>++++++++++[>++++++++++[>++++++++++[-]<-]<-]
+<-]<-]<-]<-]<-]++++++++++
+";
 
-import "lib/json.rbcvm";
+let parsed = bf_parse(warmup);
+bf_run(parsed);
+
+# import "lib/json.rbcvm";
 
 # let file_contents = read_file("1.json");
 
-function main() {
-  let json = JSON.parse(file_contents);
-  if Result.is_error(json) {
-    return json;
-  } else {
-    json = Result.data(json);
-  }
-
-  let coordinates = HashMap.get(json, "coordinates");
-  let len = Array.length(coordinates);
-  let x = 0;
-  let y = 0;
-  let z = 0;
-
-  let coord;
-  for let i = 0; i < len; i = i + 1 {
-    coord = coordinates[i];
-    x = x + HashMap.get(coord, "x");
-    y = y + HashMap.get(coord, "y");
-    z = z + HashMap.get(coord, "z");
-  }
-
-  println(x / len);
-  println(y / len);
-  println(z / len);
-}
-
-main();
+# function main() {
+#   let json = JSON.parse(file_contents);
+#   if Result.is_error(json) {
+#     return json;
+#   } else {
+#     json = Result.data(json);
+#   }
+#
+#   let coordinates = HashMap.get(json, "coordinates");
+#   let len = Array.length(coordinates);
+#   let x = 0;
+#   let y = 0;
+#   let z = 0;
+#
+#   let coord;
+#   for let i = 0; i < len; i = i + 1 {
+#     coord = coordinates[i];
+#     x = x + HashMap.get(coord, "x");
+#     y = y + HashMap.get(coord, "y");
+#     z = z + HashMap.get(coord, "z");
+#   }
+#
+#   println(x / len);
+#   println(y / len);
+#   println(z / len);
+# }
+#
+# main();

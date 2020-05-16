@@ -64,60 +64,47 @@ impl<'a> Interpreter<'a> {
         self.debuginfo.replace(debuginfo);
     }
 
+    fn push(&mut self, expr: Value) {
+        self.sp += 1;
+        self.stack.push(expr);
+    }
+
+    fn pop_n(&mut self, count: usize) {
+        self.sp -= count;
+        self.stack.truncate(self.sp);
+    }
+
+    fn pop(&mut self) -> Result<Value, &'static str> {
+        self.sp -= 1;
+        self.stack.pop().ok_or("Stack underflow")
+    }
+
+    fn pop_and_get(&mut self, count: usize) -> Vec<Value> {
+        self.sp -= count;
+        self.stack.split_off(self.sp).into_iter().rev().collect()
+    }
+
+    fn next_instruction(&mut self, code: &Vec<u8>) -> Option<u8> {
+        let inst = code.get(self.ip).map(|n| *n);
+        self.ip += 1;
+        inst
+    }
+
+    fn next_usize_bytes(&mut self, code: &Vec<u8>) -> [u8; std::mem::size_of::<usize>()] {
+        const USIZE_SIZE: usize = std::mem::size_of::<usize>();
+
+        let array: [u8; USIZE_SIZE] = code[self.ip..self.ip + USIZE_SIZE]
+            .try_into()
+            .expect("Unexpected end of bytecode");
+        self.ip += USIZE_SIZE;
+
+        array
+    }
+
     #[allow(clippy::cognitive_complexity)]
     pub fn evaluate(&mut self, code: Vec<u8>) -> Result<Value, String> {
         if cfg!(vm_debug) {
             disassemble(self.agent, &code)?;
-        }
-
-        macro_rules! push {
-            ($expr:expr) => {{
-                self.sp += 1;
-                self.stack.push($expr)
-            }};
-        }
-        macro_rules! pop {
-            () => {{
-                let val = self.stack.pop().ok_or("Stack underflow")?;
-                self.sp -= 1;
-                val
-            }};
-            ($num:expr) => {{
-                self.sp = self.sp.saturating_sub($num);
-                self.stack.truncate(self.sp);
-            }};
-        }
-        macro_rules! pop_and_get {
-            ($num:expr) => {{
-                let vals = self
-                    .stack
-                    .split_off(self.sp - $num)
-                    .into_iter()
-                    .rev()
-                    .collect::<Vec<_>>();
-                self.sp -= $num;
-                vals
-            }};
-        }
-        macro_rules! next {
-            () => {{
-                let inst = code.get(self.ip).cloned();
-                self.ip += 1;
-                inst
-            }};
-            ($type:ty) => {
-                next!(std::mem::size_of::<$type>())
-            };
-            ($expr:expr) => {{
-                let mut array = [0u8; $expr];
-
-                for i in 0..$expr {
-                    array[i] = code[self.ip + i];
-                }
-                self.ip += $expr;
-
-                array
-            }};
         }
 
         macro_rules! top {
@@ -203,10 +190,10 @@ impl<'a> Interpreter<'a> {
                 })
             };
             ($name:expr, $intop:expr, $doubleop:expr, $bconvert:expr) => {{
-                let b = pop!();
-                let a = pop!();
+                let b = self.pop()?;
+                let a = self.pop()?;
 
-                push!(if let Value::Integer(a) = a {
+                self.push(if let Value::Integer(a) = a {
                     if let Value::Integer(b) = b {
                         let converter = $bconvert;
                         Value::from($intop(a, converter(b)?))
@@ -240,7 +227,7 @@ impl<'a> Interpreter<'a> {
             }};
         }
 
-        while let Some(instruction) = next!() {
+        while let Some(instruction) = self.next_instruction(&code) {
             if cfg!(vm_debug) {
                 println!("--------------");
                 print_stack!(&self.stack);
@@ -263,30 +250,30 @@ impl<'a> Interpreter<'a> {
                 OpCode::Halt => break,
 
                 OpCode::ConstInt => {
-                    push!(Value::from(i64::from_le_bytes(next!(usize))));
+                    let usize_bytes = self.next_usize_bytes(&code);
+                    self.push(Value::from(i64::from_le_bytes(usize_bytes)));
                 }
 
                 OpCode::ConstDouble => {
-                    push!(Value::from(f64::from_bits(u64::from_le_bytes(next!(
-                        usize
-                    ))),));
+                    let usize_bytes = self.next_usize_bytes(&code);
+                    self.push(Value::from(f64::from_bits(u64::from_le_bytes(usize_bytes))));
                 }
 
                 OpCode::ConstNull => {
-                    push!(Value::Null);
+                    self.push(Value::Null);
                 }
 
                 OpCode::ConstTrue => {
-                    push!(Value::from(true));
+                    self.push(Value::from(true));
                 }
 
                 OpCode::ConstFalse => {
-                    push!(Value::from(false));
+                    self.push(Value::from(false));
                 }
 
                 OpCode::ConstString => {
-                    let idx = usize::from_le_bytes(next!(usize));
-                    push!(Value::from(self.agent.string_table[idx].as_ref()));
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    self.push(Value::from(self.agent.string_table[idx].as_ref()));
                 }
 
                 OpCode::Add => number_binop!("addition", i64::wrapping_add, f64::add),
@@ -304,28 +291,28 @@ impl<'a> Interpreter<'a> {
                 ),
 
                 OpCode::Jump => {
-                    self.ip = usize::from_le_bytes(next!(usize));
+                    self.ip = usize::from_le_bytes(self.next_usize_bytes(&code));
                 }
 
                 OpCode::JumpIfTrue => {
-                    let to = usize::from_le_bytes(next!(usize));
-                    let cond = pop!();
+                    let to = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let cond = self.pop()?;
                     if cond.is_truthy() {
                         self.ip = to;
                     }
                 }
 
                 OpCode::JumpIfFalse => {
-                    let to = usize::from_le_bytes(next!(usize));
-                    let cond = pop!();
+                    let to = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let cond = self.pop()?;
                     if !cond.is_truthy() {
                         self.ip = to;
                     }
                 }
 
                 OpCode::Call => {
-                    let function = pop!();
-                    let num_args = usize::from_le_bytes(next!(usize));
+                    let function = self.pop()?;
+                    let num_args = usize::from_le_bytes(self.next_usize_bytes(&code));
                     if let Value::Function(f) = &function {
                         macro_rules! ensure_arity {
                             ($arity:expr, $name:expr) => {{
@@ -350,9 +337,9 @@ impl<'a> Interpreter<'a> {
                                 ..
                             } => {
                                 ensure_arity!(*arity, name);
-                                let args = pop_and_get!(num_args);
+                                let args = self.pop_and_get(num_args);
                                 let result = function(self, args);
-                                push!(result);
+                                self.push(result);
                             }
                             FunctionValue::User {
                                 arity,
@@ -368,7 +355,7 @@ impl<'a> Interpreter<'a> {
                                 self.call_stack.push(*module); // for accessing correct global scope
                                 self.bp = self.sp; // new base is at current stack index
                                 self.ip = *address; // jump into function
-                                push!(function);
+                                self.push(function);
                             }
                         }
                     } else {
@@ -377,7 +364,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::Return => {
-                    let retval = pop!();
+                    let retval = self.pop()?;
                     self.call_stack
                         .pop()
                         .ok_or("Missing module id on call_stack")?;
@@ -399,32 +386,35 @@ impl<'a> Interpreter<'a> {
                         }
                     }
 
-                    pop!(num_args + self.sp - self.bp);
+                    self.pop_n(num_args + self.sp - self.bp);
 
                     self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
                     self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
-                    push!(retval);
+                    self.push(retval);
                 }
 
                 OpCode::Pop => {
-                    pop!();
+                    self.pop()?;
                 }
 
                 OpCode::LoadLocal => {
-                    push!(locals![usize::from_le_bytes(next!(usize))].clone());
+                    let usize_bytes = self.next_usize_bytes(&code);
+                    self.push(locals![usize::from_le_bytes(usize_bytes)].clone());
                 }
 
                 OpCode::StoreLocal => {
-                    let idx = usize::from_le_bytes(next!(usize));
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
                     locals![idx] = top!().clone();
                 }
 
                 OpCode::LoadGlobal => {
-                    let id = usize::from_le_bytes(next!(usize));
+                    let usize_bytes = self.next_usize_bytes(&code);
+                    let id = usize::from_le_bytes(usize_bytes);
 
                     if let Some(module) = current_module!() {
                         if let Some(val) = module.global_scope.get(&id) {
-                            push!(val.clone());
+                            let new_val = val.clone();
+                            self.push(new_val);
                         } else {
                             return error!(format!(
                                 "ReferenceError: {} is not defined",
@@ -437,7 +427,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::DeclareGlobal => {
-                    let id = usize::from_le_bytes(next!(usize));
+                    let id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
                     if let Some(module) = current_module!() {
                         module.global_scope.insert(id, Value::Null);
@@ -447,7 +437,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::StoreGlobal => {
-                    let id = usize::from_le_bytes(next!(usize));
+                    let id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
                     if let Some(module) = current_module!() {
                         if module.global_scope.contains_key(&id) {
@@ -464,15 +454,15 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::NewFunction => {
-                    let arity = usize::from_le_bytes(next!(usize));
-                    let address = usize::from_le_bytes(next!(usize));
+                    let arity = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let address = usize::from_le_bytes(self.next_usize_bytes(&code));
                     let module = if let Some(module) = current_module!() {
                         module.name()
                     } else {
                         unreachable!();
                     };
 
-                    push!(Value::from(FunctionValue::User {
+                    self.push(Value::from(FunctionValue::User {
                         name: None,
                         address,
                         arity,
@@ -482,8 +472,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BindLocal => {
-                    let idx = locals_index!() + usize::from_le_bytes(next!(usize));
-                    let mut func = pop!();
+                    let idx = locals_index!() + usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let mut func = self.pop()?;
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
                         let upvalue = if let Some(upvalue) =
@@ -498,15 +488,15 @@ impl<'a> Interpreter<'a> {
                             self.agent.upvalues.last().unwrap()
                         };
                         upvalues.push(upvalue.clone());
-                        push!(func);
+                        self.push(func);
                     } else {
                         return error!("Cannot bind local to non-user function".to_string());
                     }
                 }
 
                 OpCode::BindUpvalue => {
-                    let idx = usize::from_le_bytes(next!(usize));
-                    let mut func = pop!();
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let mut func = self.pop()?;
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
                         if let Value::Function(FunctionValue::User {
@@ -518,15 +508,15 @@ impl<'a> Interpreter<'a> {
                         } else {
                             unreachable!();
                         }
-                        push!(func);
+                        self.push(func);
                     } else {
                         return error!("Cannot bind upvalue to non-user function".to_string());
                     }
                 }
 
                 OpCode::BindArgument => {
-                    let idx = usize::from_le_bytes(next!(usize));
-                    let mut func = pop!();
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let mut func = self.pop()?;
 
                     if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
                         if let Value::Function(_) = &executing_function!() {
@@ -543,7 +533,7 @@ impl<'a> Interpreter<'a> {
                                 self.agent.upvalues.last().unwrap()
                             };
                             upvalues.push(upvalue.clone());
-                            push!(func);
+                            self.push(func);
                         } else {
                             unreachable!();
                         }
@@ -553,15 +543,15 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadUpvalue => {
-                    let idx = usize::from_le_bytes(next!(usize));
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
                     if let Value::Function(FunctionValue::User { upvalues, .. }) =
                         &executing_function!()
                     {
                         let upvalue = (*upvalues[idx]).borrow();
                         if upvalue.is_open() {
-                            push!(self.stack[upvalue.stack_index()].clone());
+                            self.push(self.stack[upvalue.stack_index()].clone());
                         } else {
-                            push!(upvalue.get_value());
+                            self.push(upvalue.get_value());
                         }
                     } else {
                         unreachable!();
@@ -569,7 +559,7 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::StoreUpvalue => {
-                    let idx = usize::from_le_bytes(next!(usize));
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
                     if let Value::Function(FunctionValue::User { upvalues, .. }) =
                         &executing_function!()
                     {
@@ -585,52 +575,52 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::LoadArgument => {
-                    let idx = usize::from_le_bytes(next!(usize));
-                    push!(arguments![idx].clone());
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    self.push(arguments![idx].clone());
                 }
 
                 OpCode::StoreArgument => {
-                    let idx = usize::from_le_bytes(next!(usize));
+                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
                     arguments![idx] = top!().clone();
                 }
 
                 OpCode::LoadFromModule => {
-                    let module_name = usize::from_le_bytes(next!(usize));
-                    let export_name = usize::from_le_bytes(next!(usize));
+                    let module_name = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    let export_name = usize::from_le_bytes(self.next_usize_bytes(&code));
 
-                    push!(self
-                        .modules
-                        .get(&module_name)
-                        .ok_or_else(|| format!(
-                            "Unknown module {}",
-                            self.agent.string_table[module_name]
-                        ))?
-                        .resolve_export(self.agent, export_name)?);
+                    self.push(
+                        self.modules
+                            .get(&module_name)
+                            .ok_or_else(|| {
+                                format!("Unknown module {}", self.agent.string_table[module_name])
+                            })?
+                            .resolve_export(self.agent, export_name)?,
+                    );
                 }
 
                 OpCode::NewArray => {
-                    let len = usize::from_le_bytes(next!(usize));
-                    push!(Value::from(vec![Value::Null; len]));
+                    let len = usize::from_le_bytes(self.next_usize_bytes(&code));
+                    self.push(Value::from(vec![Value::Null; len]));
                 }
 
                 OpCode::NewArrayWithValues => {
-                    let num_values = usize::from_le_bytes(next!(usize));
+                    let num_values = usize::from_le_bytes(self.next_usize_bytes(&code));
                     let mut values = Vec::with_capacity(num_values);
                     for _ in 0..num_values {
-                        values.push(pop!());
+                        values.push(self.pop()?);
                     }
-                    push!(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
+                    self.push(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
                 }
 
                 OpCode::ArrayGet => {
-                    let idx = pop!();
-                    let array = pop!();
+                    let idx = self.pop()?;
+                    let array = self.pop()?;
 
                     if let Value::Integer(idx) = idx {
                         if let Value::Array(array) = array {
                             let idx = idx as usize;
                             if array.borrow().len() > idx {
-                                push!(array.borrow()[idx].clone());
+                                self.push(array.borrow()[idx].clone());
                             } else {
                                 return error!(format!("Index {} is out of bounds", idx));
                             }
@@ -643,8 +633,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::ArraySet => {
-                    let idx = pop!();
-                    let array = pop!();
+                    let idx = self.pop()?;
+                    let array = self.pop()?;
 
                     if let Value::Integer(idx) = idx {
                         if let Value::Array(array) = array {
@@ -663,54 +653,54 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::Equal => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left == right));
+                    self.push(Value::from(left == right));
                 }
 
                 OpCode::NotEqual => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left != right));
+                    self.push(Value::from(left != right));
                 }
 
                 OpCode::LessThan => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left < right));
+                    self.push(Value::from(left < right));
                 }
 
                 OpCode::LessThanEqual => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left <= right));
+                    self.push(Value::from(left <= right));
                 }
 
                 OpCode::GreaterThan => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left > right));
+                    self.push(Value::from(left > right));
                 }
 
                 OpCode::GreaterThanEqual => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
-                    push!(Value::from(left >= right));
+                    self.push(Value::from(left >= right));
                 }
 
                 OpCode::BitwiseAnd => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
                     if let Value::Integer(left) = left {
                         if let Value::Integer(right) = right {
-                            push!(Value::from(left & right));
+                            self.push(Value::from(left & right));
                         } else {
                             return error!("Bitwise operations only support integers".to_string());
                         }
@@ -720,12 +710,12 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BitwiseOr => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
                     if let Value::Integer(left) = left {
                         if let Value::Integer(right) = right {
-                            push!(Value::from(left | right));
+                            self.push(Value::from(left | right));
                         } else {
                             return error!("Bitwise operations only support integers".to_string());
                         }
@@ -735,12 +725,12 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BitwiseXor => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
                     if let Value::Integer(left) = left {
                         if let Value::Integer(right) = right {
-                            push!(Value::from(left ^ right));
+                            self.push(Value::from(left ^ right));
                         } else {
                             return error!("Bitwise operations only support integers".to_string());
                         }
@@ -750,28 +740,28 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::BitwiseNot => {
-                    let right = pop!();
+                    let right = self.pop()?;
 
                     if let Value::Integer(right) = right {
-                        push!(Value::from(!right));
+                        self.push(Value::from(!right));
                     } else {
                         return error!("Bitwise operations only support integers".to_string());
                     }
                 }
 
                 OpCode::Not => {
-                    let right = pop!();
+                    let right = self.pop()?;
 
-                    push!(Value::from(!right.is_truthy()));
+                    self.push(Value::from(!right.is_truthy()));
                 }
 
                 OpCode::LeftShift => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
                     if let Value::Integer(left) = left {
                         if let Value::Integer(right) = right {
-                            push!(Value::from(left.wrapping_shl(right as u32)));
+                            self.push(Value::from(left.wrapping_shl(right as u32)));
                         } else {
                             return error!("Bitwise operations only support integers".to_string());
                         }
@@ -781,12 +771,12 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::RightShift => {
-                    let right = pop!();
-                    let left = pop!();
+                    let right = self.pop()?;
+                    let left = self.pop()?;
 
                     if let Value::Integer(left) = left {
                         if let Value::Integer(right) = right {
-                            push!(Value::from(left.wrapping_shr(right as u32)));
+                            self.push(Value::from(left.wrapping_shr(right as u32)));
                         } else {
                             return error!("Bitwise operations only support integers".to_string());
                         }
@@ -796,17 +786,17 @@ impl<'a> Interpreter<'a> {
                 }
 
                 OpCode::Neg => {
-                    let right = pop!();
+                    let right = self.pop()?;
 
                     if let Value::Integer(right) = right {
-                        push!(Value::from(-right));
+                        self.push(Value::from(-right));
                     } else {
                         return error!("Expected integer in negation expression".to_string());
                     }
                 }
 
                 OpCode::InitModule => {
-                    let name = usize::from_le_bytes(next!(usize));
+                    let name = usize::from_le_bytes(self.next_usize_bytes(&code));
 
                     debug_assert!(self.current_module.is_none());
                     self.current_module = Some(Module::new(
@@ -825,14 +815,14 @@ impl<'a> Interpreter<'a> {
 
                 OpCode::Dup => {
                     let value = top!().clone();
-                    push!(value);
+                    self.push(value);
                 }
 
                 OpCode::AllocateLocals => {
-                    let count = usize::from_le_bytes(next!(usize));
+                    let count = usize::from_le_bytes(self.next_usize_bytes(&code));
 
                     for _ in 0..count {
-                        push!(Value::Null);
+                        self.push(Value::Null);
                     }
                 }
             }
