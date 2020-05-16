@@ -180,7 +180,7 @@ Pointer :   ^
 
 import "lib/json.rbcvm";
 
-let file_contents = read_file("1.json");
+# let file_contents = read_file("1.json");
 
 function main() {
   let json = JSON.parse(file_contents);

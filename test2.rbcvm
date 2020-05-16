@@ -1,0 +1,17 @@
+module Test2;
+
+import "lib/fn.rbcvm";
+
+function test(a, b) {
+    return a + b;
+}
+
+let add2 = Fn.curry(test, 2);
+println(add2(3));
+
+function test2(a, b, c) {
+    return a * b + c;
+}
+
+let add24 = Fn.partial(test2, [2, 12]);
+println(add24(5));

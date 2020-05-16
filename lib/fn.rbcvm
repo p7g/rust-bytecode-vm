@@ -1,0 +1,15 @@
+module Fn;
+
+import "array.rbcvm";
+
+export function curry(fn, a) {
+    return function(b) {
+        return fn(a, b);
+    };
+}
+
+export function partial(fn, args) {
+    return Array.foldl(args, fn, function(acc, i) {
+        return curry(acc, i);
+    });
+}
