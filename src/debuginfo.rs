@@ -26,12 +26,12 @@ impl DebugInfo {
     where
         T: Iterator<Item = usize>,
     {
-        let original = positions.next().unwrap();
+        if let Some(original) = positions.next() {
+            self.0.insert(original, InfoEntry::Context(ctx));
 
-        self.0.insert(original, InfoEntry::Context(ctx));
-
-        for i in positions {
-            self.0.entry(i).or_insert(InfoEntry::Forward(original));
+            for i in positions {
+                self.0.entry(i).or_insert(InfoEntry::Forward(original));
+            }
         }
     }
 
