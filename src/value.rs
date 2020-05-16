@@ -163,9 +163,9 @@ pub enum Value {
     Double(f64),
     Boolean(bool),
     Null,
-    String(String),
+    String(Rc<String>),
     Array(Rc<RefCell<Box<[Value]>>>),
-    Function(FunctionValue),
+    Function(Rc<FunctionValue>),
 }
 
 impl Value {
@@ -320,13 +320,13 @@ impl From<bool> for Value {
 
 impl From<&str> for Value {
     fn from(s: &str) -> Value {
-        Value::String(s.to_string())
+        Value::String(Rc::new(s.to_string()))
     }
 }
 
 impl From<String> for Value {
     fn from(s: String) -> Value {
-        Value::String(s)
+        Value::String(Rc::new(s))
     }
 }
 
@@ -338,7 +338,7 @@ impl From<Vec<Value>> for Value {
 
 impl From<FunctionValue> for Value {
     fn from(f: FunctionValue) -> Value {
-        Value::Function(f)
+        Value::Function(Rc::new(f))
     }
 }
 
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let s = "hello world";
-        assert_eq!(Value::from(s), Value::String(s.to_string()));
+        assert_eq!(Value::from(s), Value::String(Rc::new(s.to_string())));
     }
 
     #[test]

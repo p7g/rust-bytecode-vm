@@ -21,104 +21,98 @@ function tape_get_char(tape) {
     return chr(tape_get(tape));
 }
 
-function tape_inc(tape) {
+function tape_inc(tape, amount) {
     let reel = tape[1];
     let idx = tape[0];
-    ArrayList.set(reel, idx, 1 + ArrayList.get(reel, idx));
+    ArrayList.set(reel, idx, amount + ArrayList.get(reel, idx));
 }
 
-function tape_dec(tape) {
-    let reel = tape[1];
-    let idx = tape[0];
-    ArrayList.set(reel, idx, ArrayList.get(reel, idx) - 1);
-}
-
-function tape_advance(tape) {
-    tape[0] = tape[0] + 1;
-    if ArrayList.length(tape[1]) <= tape[0] {
+function tape_move(tape, amount) {
+    tape[0] = tape[0] + amount;
+    while ArrayList.length(tape[1]) <= tape[0] {
         ArrayList.push(tape[1], 0);
     }
 }
 
-function tape_devance(tape) {
-    if tape[0] > 0 {
-        tape[0] = tape[0] - 1;
-    }
+let OP_INC = 0;
+let OP_MOVE = 1;
+let OP_LOOP = 2;
+let OP_PRINT = 3;
+
+let TOK_PLUS = ord("+");
+let TOK_MINUS = ord("-");
+let TOK_LEFT = ord("<");
+let TOK_RIGHT = ord(">");
+let TOK_DOT = ord(".");
+let TOK_LEFTBRACKET = ord("[");
+let TOK_RIGHTBRACKET = ord("]");
+
+function op(type, value) {
+    return [type, value];
 }
 
-function hash_int(key) {
-  return Hash.fnv1a([key]);
+function iterator(array) {
+    let index = 0;
+    let len = Array.length(array);
+    return function() {
+        if index == len {
+            return null;
+        }
+        let item = array[index];
+        index = index + 1;
+        return item;
+    };
+}
+
+function _bf_parse(next_char) {
+    let code = ArrayList.new();
+
+    for let c; (c = next_char()) != null; {
+        if c == TOK_PLUS {
+            ArrayList.push(code, op(OP_INC, 1));
+        } else if c == TOK_MINUS {
+            ArrayList.push(code, op(OP_INC, -1));
+        } else if c == TOK_RIGHT {
+            ArrayList.push(code, op(OP_MOVE, 1));
+        } else if c == TOK_LEFT {
+            ArrayList.push(code, op(OP_MOVE, -1));
+        } else if c == TOK_DOT {
+            ArrayList.push(code, op(OP_PRINT, null));
+        } else if c == TOK_LEFTBRACKET {
+            ArrayList.push(code, op(OP_LOOP, _bf_parse(next_char)));
+        } else if c == TOK_RIGHTBRACKET {
+            break;
+        }
+    }
+
+    return ArrayList.to_array(code);
 }
 
 function bf_parse(program) {
-    let code = ArrayList.new();
-    let bracket_map = HashMap.new();
-    HashMap.set_hash_function(bracket_map, hash_int);
-    let left_stack = ArrayList.new();
-    let pc = 0;
-
-    let chars = String.chars(program);
-    let len = Array.length(chars);
-    let c;
-    let left;
-    for let i = 0; i < len; i = i + 1 {
-        c = chars[i];
-
-        if c == "[" {
-            ArrayList.push(left_stack, pc);
-        } else if c == "]" {
-            left = ArrayList.pop(left_stack);
-            if left != null {
-                HashMap.set(bracket_map, left, pc);
-                HashMap.set(bracket_map, pc, left);
-            }
-        } else if Array.contains(String.chars("+-.,<>"), c) {
-        } else {
-            continue;
-        }
-
-        ArrayList.push(code, c);
-        pc = pc + 1;
-    }
-
-    return [ArrayList.to_array(code), bracket_map];
+    return _bf_parse(iterator(String.bytes(program)));
 }
 
-function bf_run(program) {
-    let code = program[0];
-    let bracket_map = program[1];
-    let tape = tape_new();
-    let len = Array.length(code);
-    let pc = 0;
+function _bf_run(next_op, tape) {
+    for let op; (op = next_op()) != null; {
+        let type = op[0];
+        let value = op[1];
 
-    let op;
-    while pc < len {
-        op = code[pc];
-        if op == "+" {
-            tape_inc(tape);
-        } else if op == "-" {
-            tape_dec(tape);
-        } else if op == ">" {
-            tape_advance(tape);
-        } else if op == "<" {
-            tape_devance(tape);
-        } else if op == "[" {
-            if tape_get(tape) == 0 {
-                pc = HashMap.get(bracket_map, pc);
+        if type == OP_INC {
+            tape_inc(tape, value);
+        } else if type == OP_MOVE {
+            tape_move(tape, value);
+        } else if type == OP_PRINT {
+            print(chr(tape_get(tape)));
+        } else if type == OP_LOOP {
+            while tape_get(tape) != 0 {
+                _bf_run(iterator(value), tape);
             }
-        } else if op == "]" {
-            if tape_get(tape) != 0 {
-                pc = HashMap.get(bracket_map, pc);
-            }
-        } else if op == "." {
-            print(tape_get_char(tape));
         }
-
-        if pc == null {
-          println("pc is null!!!!");
-        }
-        pc = pc + 1;
     }
+}
+
+function bf_run(ops) {
+    _bf_run(iterator(ops), tape_new());
 }
 
 let prog = "
@@ -181,8 +175,7 @@ let warmup = "
 <-]<-]<-]<-]<-]++++++++++
 ";
 
-let parsed = bf_parse(warmup);
-bf_run(parsed);
+bf_run(bf_parse(prog));
 
 # import "lib/json.rbcvm";
 

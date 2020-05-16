@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::ops::{Add, Div, Mul, Rem, Sub};
+use std::ops::{Add, Deref, Div, Mul, Rem, Sub};
 use std::rc::Rc;
 
 use crate::agent::Agent;
@@ -114,6 +114,10 @@ impl<'a> Interpreter<'a> {
         &self.stack[self.sp - 1]
     }
 
+    fn set_top(&mut self, value: Value) {
+        self.stack[self.sp - 1] = value;
+    }
+
     // in any scope except the global scope, the base pointer points after the arguments
     fn arguments_index(&self) -> Result<usize, String> {
         if self.call_stack.is_empty() {
@@ -175,34 +179,37 @@ impl<'a> Interpreter<'a> {
         let mut buf = "Stack trace:\n".to_string();
         for frame in self.call_stack.iter().rev() {
             if let Some(current_function) = frame.current_function {
-                match &self.stack[current_function] {
-                    Value::Function(FunctionValue::User { name, .. }) => {
-                        let module_name = self.agent.string_table[self
-                            .modules
-                            .get(&frame.module_id)
-                            .or_else(|| self.current_module.as_ref())
-                            .unwrap()
-                            .name()]
-                        .clone();
-                        let function_name = name.map(|name| self.agent.string_table[name].clone());
-                        buf += format!(
-                            "	{}.{}\n",
-                            module_name,
-                            function_name.unwrap_or_else(|| "<anonymous>".into())
-                        )
-                        .as_ref();
-                    }
+                if let Value::Function(function_value) = &self.stack[current_function] {
+                    match function_value.deref() {
+                        FunctionValue::User { name, .. } => {
+                            let module_name = self.agent.string_table[self
+                                .modules
+                                .get(&frame.module_id)
+                                .or_else(|| self.current_module.as_ref())
+                                .unwrap()
+                                .name()]
+                            .clone();
+                            let function_name =
+                                name.map(|name| self.agent.string_table[name].clone());
+                            buf += format!(
+                                "	{}.{}\n",
+                                module_name,
+                                function_name.unwrap_or_else(|| "<anonymous>".into())
+                            )
+                            .as_ref();
+                        }
 
-                    Value::Function(FunctionValue::Builtin { name, .. }) => {
-                        buf += format!(
-                            "	builtin {}\n",
-                            name.map(|name| self.agent.string_table[name].clone())
-                                .unwrap_or_else(|| "<anonymous>".into())
-                        )
-                        .as_ref();
+                        FunctionValue::Builtin { name, .. } => {
+                            buf += format!(
+                                "	builtin {}\n",
+                                name.map(|name| self.agent.string_table[name].clone())
+                                    .unwrap_or_else(|| "<anonymous>".into())
+                            )
+                            .as_ref();
+                        }
                     }
-
-                    _ => unreachable!(),
+                } else {
+                    unreachable!()
                 }
             } else {
                 buf += "	toplevel\n";
@@ -462,7 +469,7 @@ impl<'a> Interpreter<'a> {
                     }
                 }};
             }
-            match f {
+            match f.deref() {
                 FunctionValue::Builtin {
                     arity,
                     function,
@@ -616,57 +623,8 @@ impl<'a> Interpreter<'a> {
         let idx = self.locals_index() + usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut func = self.pop()?;
 
-        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-            let upvalue = if let Some(upvalue) = self
-                .agent
-                .upvalues
-                .iter()
-                .find(|uv| uv.borrow().is_open() && uv.borrow().stack_index() == idx)
-            {
-                upvalue
-            } else {
-                self.agent
-                    .upvalues
-                    .push(Rc::new(RefCell::new(Upvalue::new(idx))));
-                self.agent.upvalues.last().unwrap()
-            };
-            upvalues.push(upvalue.clone());
-            self.push(func);
-
-            Ok(())
-        } else {
-            Err(self.error("Cannot bind local to non-user function".to_string()))
-        }
-    }
-
-    fn bind_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
-        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        let mut func = self.pop()?;
-
-        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-            if let Value::Function(FunctionValue::User {
-                upvalues: efn_upvalues,
-                ..
-            }) = self.executing_function()?
-            {
-                upvalues.push(efn_upvalues[idx].clone());
-            } else {
-                unreachable!();
-            }
-            self.push(func);
-            Ok(())
-        } else {
-            Err(self.error("Cannot bind upvalue to non-user function".to_string()))
-        }
-    }
-
-    fn bind_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
-        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        let mut func = self.pop()?;
-
-        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-            if let Value::Function(_) = self.executing_function()? {
-                let idx = self.arguments_index()? - idx;
+        if let Value::Function(function_value) = &mut func {
+            if let Some(FunctionValue::User { upvalues, .. }) = Rc::get_mut(function_value) {
                 let upvalue = if let Some(upvalue) = self
                     .agent
                     .upvalues
@@ -682,7 +640,72 @@ impl<'a> Interpreter<'a> {
                 };
                 upvalues.push(upvalue.clone());
                 self.push(func);
+
                 Ok(())
+            } else {
+                unreachable!();
+            }
+        } else {
+            Err(self.error("Cannot bind local to non-user function".to_string()))
+        }
+    }
+
+    fn bind_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut func = self.pop()?;
+
+        if let Value::Function(function_value) = &mut func {
+            if let Some(FunctionValue::User { upvalues, .. }) = Rc::get_mut(function_value) {
+                if let Value::Function(function_value) = self.executing_function()? {
+                    if let FunctionValue::User {
+                        upvalues: efn_upvalues,
+                        ..
+                    } = function_value.deref()
+                    {
+                        upvalues.push(efn_upvalues[idx].clone());
+                    } else {
+                        unreachable!();
+                    }
+                } else {
+                    unreachable!();
+                }
+                self.push(func);
+                Ok(())
+            } else {
+                unreachable!();
+            }
+        } else {
+            Err(self.error("Cannot bind upvalue to non-user function".to_string()))
+        }
+    }
+
+    fn bind_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut func = self.pop()?;
+
+        if let Value::Function(function_value) = &mut func {
+            if let Some(FunctionValue::User { upvalues, .. }) = Rc::get_mut(function_value) {
+                if let Value::Function(_) = self.executing_function()? {
+                    let idx = self.arguments_index()? - idx;
+                    let upvalue = if let Some(upvalue) = self
+                        .agent
+                        .upvalues
+                        .iter()
+                        .find(|uv| uv.borrow().is_open() && uv.borrow().stack_index() == idx)
+                    {
+                        upvalue
+                    } else {
+                        self.agent
+                            .upvalues
+                            .push(Rc::new(RefCell::new(Upvalue::new(idx))));
+                        self.agent.upvalues.last().unwrap()
+                    };
+                    upvalues.push(upvalue.clone());
+                    self.push(func);
+                    Ok(())
+                } else {
+                    unreachable!();
+                }
             } else {
                 unreachable!();
             }
@@ -693,14 +716,16 @@ impl<'a> Interpreter<'a> {
 
     fn load_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        let idx_or_value = if let Value::Function(FunctionValue::User { upvalues, .. }) =
-            self.executing_function()?
-        {
-            let upvalue = (*upvalues[idx]).borrow();
-            if upvalue.is_open() {
-                Ok(upvalue.stack_index())
+        let idx_or_value = if let Value::Function(function_value) = self.executing_function()? {
+            if let FunctionValue::User { upvalues, .. } = function_value.deref() {
+                let upvalue = (*upvalues[idx]).borrow();
+                if upvalue.is_open() {
+                    Ok(upvalue.stack_index())
+                } else {
+                    Err(upvalue.get_value())
+                }
             } else {
-                Err(upvalue.get_value())
+                unreachable!();
             }
         } else {
             unreachable!()
@@ -717,13 +742,17 @@ impl<'a> Interpreter<'a> {
 
     fn store_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        if let Value::Function(FunctionValue::User { upvalues, .. }) = self.executing_function()? {
-            let upvalue = &upvalues[idx];
-            if upvalue.borrow().is_open() {
-                let idx = upvalue.borrow().stack_index();
-                self.stack[idx] = self.top().clone();
+        if let Value::Function(function_value) = self.executing_function()? {
+            if let FunctionValue::User { upvalues, .. } = function_value.deref() {
+                let upvalue = &upvalues[idx];
+                if upvalue.borrow().is_open() {
+                    let idx = upvalue.borrow().stack_index();
+                    self.stack[idx] = self.top().clone();
+                } else {
+                    upvalue.borrow_mut().set_value(self.top().clone());
+                }
             } else {
-                upvalue.borrow_mut().set_value(self.top().clone());
+                unreachable!();
             }
             Ok(())
         } else {
@@ -773,13 +802,14 @@ impl<'a> Interpreter<'a> {
 
     fn array_get(&mut self) -> Result<(), String> {
         let idx = self.pop()?;
-        let array = self.pop()?;
+        let array = self.top();
 
         if let Value::Integer(idx) = idx {
             if let Value::Array(array) = array {
                 let idx = idx as usize;
                 if array.borrow().len() > idx {
-                    self.push(array.borrow()[idx].clone());
+                    let value = array.borrow()[idx].clone();
+                    self.set_top(value);
                     Ok(())
                 } else {
                     Err(self.error(format!("Index {} is out of bounds", idx)))
@@ -815,59 +845,66 @@ impl<'a> Interpreter<'a> {
 
     fn equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left == right);
 
-        self.push(Value::from(left == right));
+        self.set_top(result);
         Ok(())
     }
 
     fn not_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left != right);
 
-        self.push(Value::from(left != right));
+        self.set_top(result);
         Ok(())
     }
 
     fn less_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left < right);
 
-        self.push(Value::from(left < right));
+        self.set_top(result);
         Ok(())
     }
 
     fn less_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left <= right);
 
-        self.push(Value::from(left <= right));
+        self.set_top(result);
         Ok(())
     }
 
     fn greater_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left > right);
 
-        self.push(Value::from(left > right));
+        self.set_top(result);
         Ok(())
     }
 
     fn greater_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
+        let result = Value::from(*left >= right);
 
-        self.push(Value::from(left >= right));
+        self.set_top(result);
         Ok(())
     }
 
     fn bitwise_and(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
 
         if let Value::Integer(left) = left {
             if let Value::Integer(right) = right {
-                self.push(Value::from(left & right));
+                let result = Value::from(*left & right);
+                self.set_top(result);
                 Ok(())
             } else {
                 Err(self.error("Bitwise operations only support integers".to_string()))
@@ -879,11 +916,12 @@ impl<'a> Interpreter<'a> {
 
     fn bitwise_or(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
 
         if let Value::Integer(left) = left {
             if let Value::Integer(right) = right {
-                self.push(Value::from(left | right));
+                let result = Value::from(*left | right);
+                self.set_top(result);
                 Ok(())
             } else {
                 Err(self.error("Bitwise operations only support integers".to_string()))
@@ -895,11 +933,12 @@ impl<'a> Interpreter<'a> {
 
     fn bitwise_xor(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
 
         if let Value::Integer(left) = left {
             if let Value::Integer(right) = right {
-                self.push(Value::from(left ^ right));
+                let result = Value::from(*left ^ right);
+                self.set_top(result);
                 Ok(())
             } else {
                 Err(self.error("Bitwise operations only support integers".to_string()))
@@ -910,10 +949,11 @@ impl<'a> Interpreter<'a> {
     }
 
     fn bitwise_not(&mut self) -> Result<(), String> {
-        let right = self.pop()?;
+        let right = self.top();
 
         if let Value::Integer(right) = right {
-            self.push(Value::from(!right));
+            let result = Value::from(!*right);
+            self.set_top(result);
             Ok(())
         } else {
             Err(self.error("Bitwise operations only support integers".to_string()))
@@ -921,19 +961,20 @@ impl<'a> Interpreter<'a> {
     }
 
     fn not(&mut self) -> Result<(), String> {
-        let right = self.pop()?;
+        let result = Value::from(!self.top().is_truthy());
 
-        self.push(Value::from(!right.is_truthy()));
+        self.set_top(result);
         Ok(())
     }
 
     fn left_shift(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
 
         if let Value::Integer(left) = left {
             if let Value::Integer(right) = right {
-                self.push(Value::from(left.wrapping_shl(right as u32)));
+                let result = Value::from(left.wrapping_shl(right as u32));
+                self.set_top(result);
                 Ok(())
             } else {
                 Err(self.error("Bitwise operations only support integers".to_string()))
@@ -945,11 +986,12 @@ impl<'a> Interpreter<'a> {
 
     fn right_shift(&mut self) -> Result<(), String> {
         let right = self.pop()?;
-        let left = self.pop()?;
+        let left = self.top();
 
         if let Value::Integer(left) = left {
             if let Value::Integer(right) = right {
-                self.push(Value::from(left.wrapping_shr(right as u32)));
+                let result = Value::from(left.wrapping_shr(right as u32));
+                self.set_top(result);
                 Ok(())
             } else {
                 Err(self.error("Bitwise operations only support integers".to_string()))
@@ -960,10 +1002,11 @@ impl<'a> Interpreter<'a> {
     }
 
     fn neg(&mut self) -> Result<(), String> {
-        let right = self.pop()?;
+        let right = self.top();
 
         if let Value::Integer(right) = right {
-            self.push(Value::from(-right));
+            let result = Value::from(-*right);
+            self.set_top(result);
             Ok(())
         } else {
             Err(self.error("Expected integer in negation expression".to_string()))
@@ -996,6 +1039,7 @@ impl<'a> Interpreter<'a> {
     fn allocate_locals(&mut self, code: &Vec<u8>) {
         let count = usize::from_le_bytes(self.next_usize_bytes(&code));
 
+        self.stack.reserve(count);
         for _ in 0..count {
             self.push(Value::Null);
         }

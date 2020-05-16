@@ -9,6 +9,8 @@ mod opcode;
 mod value;
 
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::io::{self, Write};
 
 use agent::Agent;
 use compiler::Compiler;
@@ -25,6 +27,7 @@ fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
 
 fn print(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     print!("{}", args[0]);
+    io::stdout().flush().map_err(|_| "Failed to flush stdout")?;
     Ok(Value::Null)
 }
 
@@ -86,7 +89,7 @@ fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String>
         }
     }
 
-    Ok(Value::String(buf))
+    Ok(Value::String(Rc::new(buf)))
 }
 
 fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
@@ -127,7 +130,9 @@ fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
 
 fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.first() {
-        Ok(Value::from(std::fs::read_to_string(s).map_err(|_| "Failed to read file".to_string())?))
+        Ok(Value::from(
+            std::fs::read_to_string(&**s).map_err(|_| "Failed to read file".to_string())?,
+        ))
     } else {
         Err("read_file: Expected string".to_string())
     }
@@ -141,11 +146,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ($name:ident, $arity:expr) => {{
             global.insert(
                 agent.intern_string(stringify!($name)),
-                Value::Function(FunctionValue::Builtin {
+                Value::Function(Rc::new(FunctionValue::Builtin {
                     name: Some(agent.intern_string(stringify!($name))),
                     arity: $arity,
                     function: $name,
-                }),
+                })),
             );
         }};
     }
