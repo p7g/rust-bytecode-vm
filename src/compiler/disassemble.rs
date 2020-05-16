@@ -84,8 +84,9 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
 
             OpCode::NewFunction => {
                 println!(
-                    "{:?}({:?}, {:?})",
+                    "{:?}({:?}, {:?}, {:?})",
                     instruction,
+                    usize::from_le_bytes(next!(usize)),
                     usize::from_le_bytes(next!(usize)),
                     usize::from_le_bytes(next!(usize)),
                 );
