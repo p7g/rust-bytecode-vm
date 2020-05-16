@@ -24,12 +24,21 @@ macro_rules! print_stack {
     }};
 }
 
+#[derive(Debug)]
+struct Frame {
+    prev_ip: usize,
+    prev_bp: usize,
+    num_args: usize,
+    module_id: usize,
+    current_function: Option<usize>,
+}
+
 pub struct Interpreter<'a> {
     pub agent: &'a mut Agent,
     intrinsics: HashMap<usize, Value>,
     modules: HashMap<usize, Module>,
     current_module: Option<Module>,
-    call_stack: Vec<usize>,
+    call_stack: Vec<Frame>,
     stack: Vec<Value>,
     ip: usize,
     bp: usize,
@@ -84,8 +93,8 @@ impl<'a> Interpreter<'a> {
         self.stack.split_off(self.sp).into_iter().rev().collect()
     }
 
-    fn next_instruction(&mut self, code: &Vec<u8>) -> Option<u8> {
-        let inst = code.get(self.ip).map(|n| *n);
+    fn next_instruction(&mut self, code: &Vec<u8>) -> u8 {
+        let inst = code[self.ip];
         self.ip += 1;
         inst
     }
@@ -101,86 +110,153 @@ impl<'a> Interpreter<'a> {
         array
     }
 
-    #[allow(clippy::cognitive_complexity)]
-    pub fn evaluate(&mut self, code: Vec<u8>) -> Result<Value, String> {
+    fn top(&self) -> &Value {
+        &self.stack[self.sp - 1]
+    }
+
+    // in any scope except the global scope, the base pointer points after the arguments
+    fn arguments_index(&self) -> Result<usize, String> {
+        if self.call_stack.is_empty() {
+            Err(self.error("Trying to access arguments when not in function".to_string()))
+        } else {
+            Ok(self.bp - 1)
+        }
+    }
+
+    fn argument(&self, at: usize) -> Result<&Value, String> {
+        Ok(&self.stack[self.arguments_index()? + at])
+    }
+
+    fn set_argument(&mut self, idx: usize, value: Value) -> Result<(), String> {
+        let idx = self.arguments_index()? + idx;
+        self.stack[idx] = value;
+        Ok(())
+    }
+
+    // in any scope except the global scope, the base pointer points to the executing function
+    fn locals_index(&self) -> usize {
+        if self.call_stack.is_empty() {
+            0
+        } else {
+            self.bp + 1
+        }
+    }
+
+    fn local(&self, at: usize) -> &Value {
+        &self.stack[self.locals_index() + at]
+    }
+
+    fn set_local(&mut self, idx: usize, value: Value) {
+        let idx = self.locals_index() + idx;
+        self.stack[idx] = value;
+    }
+
+    fn executing_function(&self) -> Result<&Value, String> {
+        if self.call_stack.is_empty() {
+            Err(self.error("Tried to get executing function in global scope".to_string()))
+        } else if let Some(func) = self.stack.get(self.bp) {
+            if let func @ Value::Function(_) = func {
+                Ok(func)
+            } else {
+                Err(self.error(
+                    "Tried to get executing function but bp didn't point to function".to_string(),
+                ))
+            }
+        } else {
+            Err(self.error(format!(
+                "Base pointer is not within stack: bp={} stack length={}",
+                self.bp,
+                self.stack.len()
+            )))
+        }
+    }
+
+    fn print_stacktrace(&self) -> String {
+        let mut buf = "Stack trace:\n".to_string();
+        for frame in self.call_stack.iter().rev() {
+            if let Some(current_function) = frame.current_function {
+                match &self.stack[current_function] {
+                    Value::Function(FunctionValue::User { name, .. }) => {
+                        let module_name = self.agent.string_table[self
+                            .modules
+                            .get(&frame.module_id)
+                            .or_else(|| self.current_module.as_ref())
+                            .unwrap()
+                            .name()]
+                        .clone();
+                        let function_name = name.map(|name| self.agent.string_table[name].clone());
+                        buf += format!(
+                            "	{}.{}\n",
+                            module_name,
+                            function_name.unwrap_or_else(|| "<anonymous>".into())
+                        )
+                        .as_ref();
+                    }
+
+                    Value::Function(FunctionValue::Builtin { name, .. }) => {
+                        buf += format!(
+                            "	builtin {}\n",
+                            name.map(|name| self.agent.string_table[name].clone())
+                                .unwrap_or_else(|| "<anonymous>".into())
+                        )
+                        .as_ref();
+                    }
+
+                    _ => unreachable!(),
+                }
+            } else {
+                buf += "	toplevel\n";
+            }
+        }
+        buf
+    }
+
+    fn current_module(&self) -> Option<&Module> {
+        if !self.call_stack.is_empty()
+            && self.call_stack.last().unwrap().module_id
+                != self.current_module.as_ref().unwrap().name()
+        {
+            self.modules.get(&self.call_stack.last().unwrap().module_id)
+        } else {
+            self.current_module.as_ref()
+        }
+    }
+
+    fn current_module_mut(&mut self) -> Option<&mut Module> {
+        if !self.call_stack.is_empty()
+            && self.call_stack.last().unwrap().module_id
+                != self.current_module.as_ref().unwrap().name()
+        {
+            self.modules
+                .get_mut(&self.call_stack.last().unwrap().module_id)
+        } else {
+            self.current_module.as_mut()
+        }
+    }
+
+    fn error(&self, msg: String) -> String {
+        let mod_name = self.current_module().unwrap().name();
+        format!(
+            "Error in {}: {}\n{:#?}",
+            self.agent.string_table[mod_name].clone(),
+            msg,
+            self.debuginfo.map(|d| d.get(self.ip)),
+        )
+    }
+
+    pub fn evaluate(&mut self, code: Vec<u8>) -> Value {
+        match self._evaluate(code) {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("{}\n{}", e, self.print_stacktrace());
+                Value::Null
+            }
+        }
+    }
+
+    fn _evaluate(&mut self, code: Vec<u8>) -> Result<Value, String> {
         if cfg!(vm_debug) {
             disassemble(self.agent, &code)?;
-        }
-
-        macro_rules! top {
-            () => {
-                self.stack[self.sp - 1]
-            };
-        }
-
-        // in any scope except the global scope, the base pointer points after the arguments
-        macro_rules! arguments_index {
-            () => {
-                if self.call_stack.is_empty() {
-                    return error!("Trying to access arguments when not in function".to_string());
-                } else {
-                    self.bp - 1
-                }
-            };
-        }
-
-        macro_rules! arguments {
-            ($idx:expr) => {
-                self.stack[arguments_index!() - $idx]
-            };
-        }
-
-        // in any scope except the global scope, the base pointer points to the executing function
-        macro_rules! locals_index {
-            () => {
-                if self.call_stack.is_empty() {
-                    0
-                } else {
-                    self.bp + 1
-                }
-            };
-        }
-
-        macro_rules! locals {
-            ($index:expr) => {
-                self.stack[$index + locals_index!()]
-            };
-        }
-
-        macro_rules! executing_function {
-            () => {
-                if self.call_stack.is_empty() {
-                    return error!("Tried to get executing function in global scope".to_string());
-                } else if let Some(func) = self.stack.get(self.bp) {
-                    if let func @ Value::Function(_) = func {
-                        func.clone()
-                    } else {
-                        return error!(
-                            "Tried to get executing function but bp didn't point to function"
-                                .to_string()
-                        );
-                    }
-                } else {
-                    return error!(format!(
-                        "Base pointer is not within stack: bp={} stack length={}",
-                        self.bp,
-                        self.stack.len()
-                    ));
-                }
-            };
-        }
-
-        macro_rules! current_module {
-            () => {{
-                if !self.call_stack.is_empty()
-                    && *self.call_stack.last().unwrap()
-                        != self.current_module.as_ref().unwrap().name()
-                {
-                    self.modules.get_mut(self.call_stack.last().unwrap())
-                } else {
-                    self.current_module.as_mut()
-                }
-            }};
         }
 
         macro_rules! number_binop {
@@ -200,7 +276,9 @@ impl<'a> Interpreter<'a> {
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a as f64, b))
                     } else {
-                        return error!(format!("Got unexpected value {:?} in {}", b, $name));
+                        return Err(
+                            self.error(format!("Got unexpected value {:?} in {}", b, $name))
+                        );
                     }
                 } else if let Value::Double(a) = a {
                     if let Value::Integer(b) = b {
@@ -208,26 +286,19 @@ impl<'a> Interpreter<'a> {
                     } else if let Value::Double(b) = b {
                         Value::from($doubleop(a, b))
                     } else {
-                        return error!(format!("Got unexpected value {:?} in {}", b, $name));
+                        return Err(
+                            self.error(format!("Got unexpected value {:?} in {}", b, $name))
+                        );
                     }
                 } else {
-                    return error!(format!("Got unexpected value {:?} in {}", a, $name));
+                    return Err(self.error(format!("Got unexpected value {:?} in {}", a, $name)));
                 })
             }};
         }
 
-        macro_rules! error {
-            ($msg:expr) => {{
-                Err(format!(
-                    "Error in {}: {}\n{:#?}",
-                    self.agent.string_table[current_module!().unwrap().name()].clone(),
-                    $msg,
-                    self.debuginfo.map(|d| d.get(self.ip)),
-                ))
-            }};
-        }
-
-        while let Some(instruction) = self.next_instruction(&code) {
+        let code_len = code.len();
+        while self.ip < code_len {
+            let instruction = self.next_instruction(&code);
             if cfg!(vm_debug) {
                 println!("--------------");
                 print_stack!(&self.stack);
@@ -235,7 +306,7 @@ impl<'a> Interpreter<'a> {
                 println!("ip: {} sp: {} bp: {}", self.ip, self.sp, self.bp);
                 println!(
                     "{} {:?}",
-                    if let Some(m) = current_module!() {
+                    if let Some(m) = self.current_module() {
                         self.agent.string_table[m.name()].clone()
                     } else {
                         "No module".to_string()
@@ -248,33 +319,12 @@ impl<'a> Interpreter<'a> {
 
             match OpCode::from(instruction) {
                 OpCode::Halt => break,
-
-                OpCode::ConstInt => {
-                    let usize_bytes = self.next_usize_bytes(&code);
-                    self.push(Value::from(i64::from_le_bytes(usize_bytes)));
-                }
-
-                OpCode::ConstDouble => {
-                    let usize_bytes = self.next_usize_bytes(&code);
-                    self.push(Value::from(f64::from_bits(u64::from_le_bytes(usize_bytes))));
-                }
-
-                OpCode::ConstNull => {
-                    self.push(Value::Null);
-                }
-
-                OpCode::ConstTrue => {
-                    self.push(Value::from(true));
-                }
-
-                OpCode::ConstFalse => {
-                    self.push(Value::from(false));
-                }
-
-                OpCode::ConstString => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    self.push(Value::from(self.agent.string_table[idx].as_ref()));
-                }
+                OpCode::ConstInt => self.const_int(&code),
+                OpCode::ConstDouble => self.const_double(&code),
+                OpCode::ConstNull => self.const_null(),
+                OpCode::ConstTrue => self.const_true(),
+                OpCode::ConstFalse => self.const_false(),
+                OpCode::ConstString => self.const_string(&code),
 
                 OpCode::Add => number_binop!("addition", i64::wrapping_add, f64::add),
                 OpCode::Sub => number_binop!("subtraction", i64::wrapping_sub, f64::sub),
@@ -290,541 +340,50 @@ impl<'a> Interpreter<'a> {
                     }
                 ),
 
-                OpCode::Jump => {
-                    self.ip = usize::from_le_bytes(self.next_usize_bytes(&code));
-                }
-
-                OpCode::JumpIfTrue => {
-                    let to = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let cond = self.pop()?;
-                    if cond.is_truthy() {
-                        self.ip = to;
-                    }
-                }
-
-                OpCode::JumpIfFalse => {
-                    let to = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let cond = self.pop()?;
-                    if !cond.is_truthy() {
-                        self.ip = to;
-                    }
-                }
-
-                OpCode::Call => {
-                    let function = self.pop()?;
-                    let num_args = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    if let Value::Function(f) = &function {
-                        macro_rules! ensure_arity {
-                            ($arity:expr, $name:expr) => {{
-                                if num_args < $arity {
-                                    let name = if let Some(name) = $name {
-                                        self.agent.string_table[*name].as_ref()
-                                    } else {
-                                        "<anonymous>"
-                                    };
-                                    return error!(format!(
-                                        "Function {} expected {} args, got {}",
-                                        name, $arity, num_args
-                                    ));
-                                }
-                            }};
-                        }
-                        match f {
-                            FunctionValue::Builtin {
-                                arity,
-                                function,
-                                name,
-                                ..
-                            } => {
-                                ensure_arity!(*arity, name);
-                                let args = self.pop_and_get(num_args);
-                                let result = function(self, args);
-                                self.push(result);
-                            }
-                            FunctionValue::User {
-                                arity,
-                                address,
-                                name,
-                                module,
-                                ..
-                            } => {
-                                ensure_arity!(*arity, name);
-                                self.call_stack.push(self.ip); // return address
-                                self.call_stack.push(self.bp); // current base pointer
-                                self.call_stack.push(num_args); // for cleanup
-                                self.call_stack.push(*module); // for accessing correct global scope
-                                self.bp = self.sp; // new base is at current stack index
-                                self.ip = *address; // jump into function
-                                self.push(function);
-                            }
-                        }
-                    } else {
-                        return error!(format!("Value {} is not callable", function));
-                    }
-                }
-
-                OpCode::Return => {
-                    let retval = self.pop()?;
-                    self.call_stack
-                        .pop()
-                        .ok_or("Missing module id on call_stack")?;
-                    let num_args = self
-                        .call_stack
-                        .pop()
-                        .ok_or("Missing num_args on call_stack")?;
-
-                    while let Some(uv) = self.agent.upvalues.pop() {
-                        if uv.borrow().is_open() {
-                            let i = uv.borrow().stack_index();
-                            if i < self.bp - num_args {
-                                self.agent.upvalues.push(uv);
-                                break;
-                            }
-                            uv.borrow_mut().close(self.stack[i].clone());
-                        } else {
-                            return error!("Had closed upvalue in agent.upvalues".to_string());
-                        }
-                    }
-
-                    self.pop_n(num_args + self.sp - self.bp);
-
-                    self.bp = self.call_stack.pop().ok_or("Missing bp on call_stack")?;
-                    self.ip = self.call_stack.pop().ok_or("Missing ip on call_stack")?;
-                    self.push(retval);
-                }
-
+                OpCode::Jump => self.jump(&code),
+                OpCode::JumpIfTrue => self.jump_if_true(&code)?,
+                OpCode::JumpIfFalse => self.jump_if_false(&code)?,
+                OpCode::Call => self.call(&code)?,
+                OpCode::Return => self.return_()?,
                 OpCode::Pop => {
                     self.pop()?;
                 }
-
-                OpCode::LoadLocal => {
-                    let usize_bytes = self.next_usize_bytes(&code);
-                    self.push(locals![usize::from_le_bytes(usize_bytes)].clone());
-                }
-
-                OpCode::StoreLocal => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    locals![idx] = top!().clone();
-                }
-
-                OpCode::LoadGlobal => {
-                    let usize_bytes = self.next_usize_bytes(&code);
-                    let id = usize::from_le_bytes(usize_bytes);
-
-                    if let Some(module) = current_module!() {
-                        if let Some(val) = module.global_scope.get(&id) {
-                            let new_val = val.clone();
-                            self.push(new_val);
-                        } else {
-                            return error!(format!(
-                                "ReferenceError: {} is not defined",
-                                self.agent.string_table[id]
-                            ));
-                        }
-                    } else {
-                        unreachable!();
-                    }
-                }
-
-                OpCode::DeclareGlobal => {
-                    let id = usize::from_le_bytes(self.next_usize_bytes(&code));
-
-                    if let Some(module) = current_module!() {
-                        module.global_scope.insert(id, Value::Null);
-                    } else {
-                        unreachable!();
-                    }
-                }
-
-                OpCode::StoreGlobal => {
-                    let id = usize::from_le_bytes(self.next_usize_bytes(&code));
-
-                    if let Some(module) = current_module!() {
-                        if module.global_scope.contains_key(&id) {
-                            module.global_scope.insert(id, top!().clone());
-                        } else {
-                            return error!(format!(
-                                "ReferenceError: {} is not defined",
-                                self.agent.string_table[id]
-                            ));
-                        }
-                    } else {
-                        unreachable!();
-                    }
-                }
-
-                OpCode::NewFunction => {
-                    let arity = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let address = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let module = if let Some(module) = current_module!() {
-                        module.name()
-                    } else {
-                        unreachable!();
-                    };
-
-                    self.push(Value::from(FunctionValue::User {
-                        name: None,
-                        address,
-                        arity,
-                        module,
-                        upvalues: Vec::new(),
-                    }));
-                }
-
-                OpCode::BindLocal => {
-                    let idx = locals_index!() + usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let mut func = self.pop()?;
-
-                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-                        let upvalue = if let Some(upvalue) =
-                            self.agent.upvalues.iter().find(|uv| {
-                                uv.borrow().is_open() && uv.borrow().stack_index() == idx
-                            }) {
-                            upvalue
-                        } else {
-                            self.agent
-                                .upvalues
-                                .push(Rc::new(RefCell::new(Upvalue::new(idx))));
-                            self.agent.upvalues.last().unwrap()
-                        };
-                        upvalues.push(upvalue.clone());
-                        self.push(func);
-                    } else {
-                        return error!("Cannot bind local to non-user function".to_string());
-                    }
-                }
-
-                OpCode::BindUpvalue => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let mut func = self.pop()?;
-
-                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-                        if let Value::Function(FunctionValue::User {
-                            upvalues: efn_upvalues,
-                            ..
-                        }) = &executing_function!()
-                        {
-                            upvalues.push(efn_upvalues[idx].clone());
-                        } else {
-                            unreachable!();
-                        }
-                        self.push(func);
-                    } else {
-                        return error!("Cannot bind upvalue to non-user function".to_string());
-                    }
-                }
-
-                OpCode::BindArgument => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let mut func = self.pop()?;
-
-                    if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
-                        if let Value::Function(_) = &executing_function!() {
-                            let idx = arguments_index!() - idx;
-                            let upvalue = if let Some(upvalue) =
-                                self.agent.upvalues.iter().find(|uv| {
-                                    uv.borrow().is_open() && uv.borrow().stack_index() == idx
-                                }) {
-                                upvalue
-                            } else {
-                                self.agent
-                                    .upvalues
-                                    .push(Rc::new(RefCell::new(Upvalue::new(idx))));
-                                self.agent.upvalues.last().unwrap()
-                            };
-                            upvalues.push(upvalue.clone());
-                            self.push(func);
-                        } else {
-                            unreachable!();
-                        }
-                    } else {
-                        return error!("Cannot bind argument to non-user function".to_string());
-                    }
-                }
-
-                OpCode::LoadUpvalue => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    if let Value::Function(FunctionValue::User { upvalues, .. }) =
-                        &executing_function!()
-                    {
-                        let upvalue = (*upvalues[idx]).borrow();
-                        if upvalue.is_open() {
-                            self.push(self.stack[upvalue.stack_index()].clone());
-                        } else {
-                            self.push(upvalue.get_value());
-                        }
-                    } else {
-                        unreachable!();
-                    }
-                }
-
-                OpCode::StoreUpvalue => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    if let Value::Function(FunctionValue::User { upvalues, .. }) =
-                        &executing_function!()
-                    {
-                        let upvalue = &upvalues[idx];
-                        if upvalue.borrow().is_open() {
-                            self.stack[upvalue.borrow().stack_index()] = top!().clone();
-                        } else {
-                            upvalue.borrow_mut().set_value(top!().clone());
-                        }
-                    } else {
-                        unreachable!();
-                    }
-                }
-
-                OpCode::LoadArgument => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    self.push(arguments![idx].clone());
-                }
-
-                OpCode::StoreArgument => {
-                    let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    arguments![idx] = top!().clone();
-                }
-
-                OpCode::LoadFromModule => {
-                    let module_name = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let export_name = usize::from_le_bytes(self.next_usize_bytes(&code));
-
-                    self.push(
-                        self.modules
-                            .get(&module_name)
-                            .ok_or_else(|| {
-                                format!("Unknown module {}", self.agent.string_table[module_name])
-                            })?
-                            .resolve_export(self.agent, export_name)?,
-                    );
-                }
-
-                OpCode::NewArray => {
-                    let len = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    self.push(Value::from(vec![Value::Null; len]));
-                }
-
-                OpCode::NewArrayWithValues => {
-                    let num_values = usize::from_le_bytes(self.next_usize_bytes(&code));
-                    let mut values = Vec::with_capacity(num_values);
-                    for _ in 0..num_values {
-                        values.push(self.pop()?);
-                    }
-                    self.push(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
-                }
-
-                OpCode::ArrayGet => {
-                    let idx = self.pop()?;
-                    let array = self.pop()?;
-
-                    if let Value::Integer(idx) = idx {
-                        if let Value::Array(array) = array {
-                            let idx = idx as usize;
-                            if array.borrow().len() > idx {
-                                self.push(array.borrow()[idx].clone());
-                            } else {
-                                return error!(format!("Index {} is out of bounds", idx));
-                            }
-                        } else {
-                            return error!("Trying to access index of non-array".to_string());
-                        }
-                    } else {
-                        return error!("Array index must be an integer".to_string());
-                    }
-                }
-
-                OpCode::ArraySet => {
-                    let idx = self.pop()?;
-                    let array = self.pop()?;
-
-                    if let Value::Integer(idx) = idx {
-                        if let Value::Array(array) = array {
-                            let idx = idx as usize;
-                            if array.borrow().len() > idx {
-                                array.borrow_mut()[idx] = top!().clone();
-                            } else {
-                                return error!(format!("Index {} is out of bounds", idx));
-                            }
-                        } else {
-                            return error!("Trying to set index of non-array".to_string());
-                        }
-                    } else {
-                        return error!("Array index must be an integer".to_string());
-                    }
-                }
-
-                OpCode::Equal => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left == right));
-                }
-
-                OpCode::NotEqual => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left != right));
-                }
-
-                OpCode::LessThan => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left < right));
-                }
-
-                OpCode::LessThanEqual => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left <= right));
-                }
-
-                OpCode::GreaterThan => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left > right));
-                }
-
-                OpCode::GreaterThanEqual => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    self.push(Value::from(left >= right));
-                }
-
-                OpCode::BitwiseAnd => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    if let Value::Integer(left) = left {
-                        if let Value::Integer(right) = right {
-                            self.push(Value::from(left & right));
-                        } else {
-                            return error!("Bitwise operations only support integers".to_string());
-                        }
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::BitwiseOr => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    if let Value::Integer(left) = left {
-                        if let Value::Integer(right) = right {
-                            self.push(Value::from(left | right));
-                        } else {
-                            return error!("Bitwise operations only support integers".to_string());
-                        }
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::BitwiseXor => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    if let Value::Integer(left) = left {
-                        if let Value::Integer(right) = right {
-                            self.push(Value::from(left ^ right));
-                        } else {
-                            return error!("Bitwise operations only support integers".to_string());
-                        }
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::BitwiseNot => {
-                    let right = self.pop()?;
-
-                    if let Value::Integer(right) = right {
-                        self.push(Value::from(!right));
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::Not => {
-                    let right = self.pop()?;
-
-                    self.push(Value::from(!right.is_truthy()));
-                }
-
-                OpCode::LeftShift => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    if let Value::Integer(left) = left {
-                        if let Value::Integer(right) = right {
-                            self.push(Value::from(left.wrapping_shl(right as u32)));
-                        } else {
-                            return error!("Bitwise operations only support integers".to_string());
-                        }
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::RightShift => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-
-                    if let Value::Integer(left) = left {
-                        if let Value::Integer(right) = right {
-                            self.push(Value::from(left.wrapping_shr(right as u32)));
-                        } else {
-                            return error!("Bitwise operations only support integers".to_string());
-                        }
-                    } else {
-                        return error!("Bitwise operations only support integers".to_string());
-                    }
-                }
-
-                OpCode::Neg => {
-                    let right = self.pop()?;
-
-                    if let Value::Integer(right) = right {
-                        self.push(Value::from(-right));
-                    } else {
-                        return error!("Expected integer in negation expression".to_string());
-                    }
-                }
-
-                OpCode::InitModule => {
-                    let name = usize::from_le_bytes(self.next_usize_bytes(&code));
-
-                    debug_assert!(self.current_module.is_none());
-                    self.current_module = Some(Module::new(
-                        self.agent.modules[&name].clone(),
-                        self.intrinsics.clone(),
-                    ));
-                }
-
-                OpCode::EndModule => {
-                    let module = self.current_module.take();
-                    debug_assert!(module.is_some());
-
-                    let module = module.unwrap();
-                    self.modules.insert(module.name(), module);
-                }
-
-                OpCode::Dup => {
-                    let value = top!().clone();
-                    self.push(value);
-                }
-
-                OpCode::AllocateLocals => {
-                    let count = usize::from_le_bytes(self.next_usize_bytes(&code));
-
-                    for _ in 0..count {
-                        self.push(Value::Null);
-                    }
-                }
+                OpCode::LoadLocal => self.load_local(&code),
+                OpCode::StoreLocal => self.store_local(&code),
+                OpCode::LoadGlobal => self.load_global(&code)?,
+                OpCode::DeclareGlobal => self.declare_global(&code),
+                OpCode::StoreGlobal => self.store_global(&code)?,
+                OpCode::NewFunction => self.new_function(&code),
+                OpCode::BindLocal => self.bind_local(&code)?,
+                OpCode::BindUpvalue => self.bind_upvalue(&code)?,
+                OpCode::BindArgument => self.bind_argument(&code)?,
+                OpCode::LoadUpvalue => self.load_upvalue(&code)?,
+                OpCode::StoreUpvalue => self.store_upvalue(&code)?,
+                OpCode::LoadArgument => self.load_argument(&code)?,
+                OpCode::StoreArgument => self.store_argument(&code)?,
+                OpCode::LoadFromModule => self.load_from_module(&code)?,
+                OpCode::NewArray => self.new_array(&code),
+                OpCode::NewArrayWithValues => self.new_array_with_values(&code)?,
+                OpCode::ArrayGet => self.array_get()?,
+                OpCode::ArraySet => self.array_set()?,
+                OpCode::Equal => self.equal()?,
+                OpCode::NotEqual => self.not_equal()?,
+                OpCode::LessThan => self.less_than()?,
+                OpCode::LessThanEqual => self.less_than_equal()?,
+                OpCode::GreaterThan => self.greater_than()?,
+                OpCode::GreaterThanEqual => self.greater_than_equal()?,
+                OpCode::BitwiseAnd => self.bitwise_and()?,
+                OpCode::BitwiseOr => self.bitwise_or()?,
+                OpCode::BitwiseXor => self.bitwise_xor()?,
+                OpCode::BitwiseNot => self.bitwise_not()?,
+                OpCode::Not => self.not()?,
+                OpCode::LeftShift => self.left_shift()?,
+                OpCode::RightShift => self.right_shift()?,
+                OpCode::Neg => self.neg()?,
+                OpCode::InitModule => self.init_module(&code),
+                OpCode::EndModule => self.end_module(),
+                OpCode::Dup => self.dup(),
+                OpCode::AllocateLocals => self.allocate_locals(&code),
             }
         }
 
@@ -833,6 +392,613 @@ impl<'a> Interpreter<'a> {
         } else {
             Value::Null
         })
+    }
+
+    fn const_int(&mut self, code: &Vec<u8>) {
+        let usize_bytes = self.next_usize_bytes(&code);
+        self.push(Value::from(i64::from_le_bytes(usize_bytes)));
+    }
+
+    fn const_double(&mut self, code: &Vec<u8>) {
+        let usize_bytes = self.next_usize_bytes(&code);
+        self.push(Value::from(f64::from_bits(u64::from_le_bytes(usize_bytes))));
+    }
+
+    fn const_null(&mut self) {
+        self.push(Value::Null);
+    }
+
+    fn const_true(&mut self) {
+        self.push(Value::from(true));
+    }
+
+    fn const_false(&mut self) {
+        self.push(Value::from(false));
+    }
+
+    fn const_string(&mut self, code: &Vec<u8>) {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        self.push(Value::from(self.agent.string_table[idx].as_ref()));
+    }
+
+    fn jump(&mut self, code: &Vec<u8>) {
+        self.ip = usize::from_le_bytes(self.next_usize_bytes(&code));
+    }
+
+    fn jump_if_true(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let to = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let cond = self.pop()?;
+        if cond.is_truthy() {
+            self.ip = to;
+        }
+        Ok(())
+    }
+
+    fn jump_if_false(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let to = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let cond = self.pop()?;
+        if !cond.is_truthy() {
+            self.ip = to;
+        }
+        Ok(())
+    }
+
+    fn call(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let function = self.pop()?;
+        let num_args = usize::from_le_bytes(self.next_usize_bytes(&code));
+        if let Value::Function(f) = &function {
+            macro_rules! ensure_arity {
+                ($arity:expr, $name:expr) => {{
+                    if num_args < $arity {
+                        let name = if let Some(name) = $name {
+                            self.agent.string_table[*name].as_ref()
+                        } else {
+                            "<anonymous>"
+                        };
+                        return Err(self.error(format!(
+                            "Function {} expected {} args, got {}",
+                            name, $arity, num_args
+                        )));
+                    }
+                }};
+            }
+            match f {
+                FunctionValue::Builtin {
+                    arity,
+                    function,
+                    name,
+                    ..
+                } => {
+                    ensure_arity!(*arity, name);
+                    let args = self.pop_and_get(num_args);
+                    let result = function(self, args)?;
+                    self.push(result);
+                }
+                FunctionValue::User {
+                    arity,
+                    address,
+                    name,
+                    module,
+                    ..
+                } => {
+                    ensure_arity!(*arity, name);
+                    self.call_stack.push(Frame {
+                        prev_ip: self.ip,
+                        prev_bp: self.bp,
+                        num_args,           // for cleanup
+                        module_id: *module, // for accessing correct global scope
+                        current_function: if self.call_stack.is_empty() {
+                            None
+                        } else {
+                            Some(self.bp)
+                        },
+                    });
+                    self.bp = self.sp; // new base is at current stack index
+                    self.ip = *address; // jump into function
+                    self.push(function);
+                }
+            }
+            Ok(())
+        } else {
+            Err(self.error(format!("Value {} is not callable", function)))
+        }
+    }
+
+    fn return_(&mut self) -> Result<(), String> {
+        let retval = self.pop()?;
+        let frame = self.call_stack.pop().ok_or("Missing stack frame")?;
+
+        while let Some(uv) = self.agent.upvalues.pop() {
+            if uv.borrow().is_open() {
+                let i = uv.borrow().stack_index();
+                if i < self.bp - frame.num_args {
+                    self.agent.upvalues.push(uv);
+                    break;
+                }
+                uv.borrow_mut().close(self.stack[i].clone());
+            } else {
+                return Err(self.error("Had closed upvalue in agent.upvalues".to_string()));
+            }
+        }
+
+        self.pop_n(frame.num_args + self.sp - self.bp);
+
+        self.bp = frame.prev_bp;
+        self.ip = frame.prev_ip;
+        self.push(retval);
+
+        Ok(())
+    }
+
+    fn load_local(&mut self, code: &Vec<u8>) {
+        let usize_bytes = self.next_usize_bytes(&code);
+        self.push(self.local(usize::from_le_bytes(usize_bytes)).clone());
+    }
+
+    fn store_local(&mut self, code: &Vec<u8>) {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        self.set_local(idx, self.top().clone());
+    }
+
+    fn load_global(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let usize_bytes = self.next_usize_bytes(&code);
+        let id = usize::from_le_bytes(usize_bytes);
+
+        if let Some(module) = self.current_module_mut() {
+            if let Some(val) = module.global_scope.get(&id) {
+                let new_val = val.clone();
+                self.push(new_val);
+                Ok(())
+            } else {
+                Err(self.error(format!(
+                    "ReferenceError: {} is not defined",
+                    self.agent.string_table[id]
+                )))
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn declare_global(&mut self, code: &Vec<u8>) {
+        let id = usize::from_le_bytes(self.next_usize_bytes(&code));
+
+        if let Some(module) = self.current_module_mut() {
+            module.global_scope.insert(id, Value::Null);
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn store_global(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let id = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let top = self.top().clone();
+
+        if let Some(module) = self.current_module_mut() {
+            if module.global_scope.contains_key(&id) {
+                module.global_scope.insert(id, top);
+                Ok(())
+            } else {
+                Err(self.error(format!(
+                    "ReferenceError: {} is not defined",
+                    self.agent.string_table[id]
+                )))
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn new_function(&mut self, code: &Vec<u8>) {
+        let name = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let arity = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let address = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let module = if let Some(module) = self.current_module_mut() {
+            module.name()
+        } else {
+            unreachable!();
+        };
+
+        self.push(Value::from(FunctionValue::User {
+            name: if name == std::usize::MAX {
+                None
+            } else {
+                Some(name)
+            },
+            address,
+            arity,
+            module,
+            upvalues: Vec::new(),
+        }));
+    }
+
+    fn bind_local(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = self.locals_index() + usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut func = self.pop()?;
+
+        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+            let upvalue = if let Some(upvalue) = self
+                .agent
+                .upvalues
+                .iter()
+                .find(|uv| uv.borrow().is_open() && uv.borrow().stack_index() == idx)
+            {
+                upvalue
+            } else {
+                self.agent
+                    .upvalues
+                    .push(Rc::new(RefCell::new(Upvalue::new(idx))));
+                self.agent.upvalues.last().unwrap()
+            };
+            upvalues.push(upvalue.clone());
+            self.push(func);
+
+            Ok(())
+        } else {
+            Err(self.error("Cannot bind local to non-user function".to_string()))
+        }
+    }
+
+    fn bind_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut func = self.pop()?;
+
+        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+            if let Value::Function(FunctionValue::User {
+                upvalues: efn_upvalues,
+                ..
+            }) = self.executing_function()?
+            {
+                upvalues.push(efn_upvalues[idx].clone());
+            } else {
+                unreachable!();
+            }
+            self.push(func);
+            Ok(())
+        } else {
+            Err(self.error("Cannot bind upvalue to non-user function".to_string()))
+        }
+    }
+
+    fn bind_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut func = self.pop()?;
+
+        if let Value::Function(FunctionValue::User { upvalues, .. }) = &mut func {
+            if let Value::Function(_) = self.executing_function()? {
+                let idx = self.arguments_index()? - idx;
+                let upvalue = if let Some(upvalue) = self
+                    .agent
+                    .upvalues
+                    .iter()
+                    .find(|uv| uv.borrow().is_open() && uv.borrow().stack_index() == idx)
+                {
+                    upvalue
+                } else {
+                    self.agent
+                        .upvalues
+                        .push(Rc::new(RefCell::new(Upvalue::new(idx))));
+                    self.agent.upvalues.last().unwrap()
+                };
+                upvalues.push(upvalue.clone());
+                self.push(func);
+                Ok(())
+            } else {
+                unreachable!();
+            }
+        } else {
+            Err(self.error("Cannot bind argument to non-user function".to_string()))
+        }
+    }
+
+    fn load_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let idx_or_value = if let Value::Function(FunctionValue::User { upvalues, .. }) =
+            self.executing_function()?
+        {
+            let upvalue = (*upvalues[idx]).borrow();
+            if upvalue.is_open() {
+                Ok(upvalue.stack_index())
+            } else {
+                Err(upvalue.get_value())
+            }
+        } else {
+            unreachable!()
+        };
+
+        if let Ok(idx) = idx_or_value {
+            let value = self.stack[idx].clone();
+            self.push(value);
+        } else if let Err(value) = idx_or_value {
+            self.push(value);
+        }
+        Ok(())
+    }
+
+    fn store_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        if let Value::Function(FunctionValue::User { upvalues, .. }) = self.executing_function()? {
+            let upvalue = &upvalues[idx];
+            if upvalue.borrow().is_open() {
+                let idx = upvalue.borrow().stack_index();
+                self.stack[idx] = self.top().clone();
+            } else {
+                upvalue.borrow_mut().set_value(self.top().clone());
+            }
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn load_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        self.push(self.argument(idx)?.clone());
+        Ok(())
+    }
+
+    fn store_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
+        self.set_argument(idx, self.top().clone())?;
+        Ok(())
+    }
+
+    fn load_from_module(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let module_name = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let export_name = usize::from_le_bytes(self.next_usize_bytes(&code));
+
+        self.push(
+            self.modules
+                .get(&module_name)
+                .ok_or_else(|| format!("Unknown module {}", self.agent.string_table[module_name]))?
+                .resolve_export(self.agent, export_name)?,
+        );
+        Ok(())
+    }
+
+    fn new_array(&mut self, code: &Vec<u8>) {
+        let len = usize::from_le_bytes(self.next_usize_bytes(&code));
+        self.push(Value::from(vec![Value::Null; len]));
+    }
+
+    fn new_array_with_values(&mut self, code: &Vec<u8>) -> Result<(), String> {
+        let num_values = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let mut values = Vec::with_capacity(num_values);
+        for _ in 0..num_values {
+            values.push(self.pop()?);
+        }
+        self.push(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
+        Ok(())
+    }
+
+    fn array_get(&mut self) -> Result<(), String> {
+        let idx = self.pop()?;
+        let array = self.pop()?;
+
+        if let Value::Integer(idx) = idx {
+            if let Value::Array(array) = array {
+                let idx = idx as usize;
+                if array.borrow().len() > idx {
+                    self.push(array.borrow()[idx].clone());
+                    Ok(())
+                } else {
+                    Err(self.error(format!("Index {} is out of bounds", idx)))
+                }
+            } else {
+                Err(self.error("Trying to access index of non-array".to_string()))
+            }
+        } else {
+            Err(self.error("Array index must be an integer".to_string()))
+        }
+    }
+
+    fn array_set(&mut self) -> Result<(), String> {
+        let idx = self.pop()?;
+        let array = self.pop()?;
+
+        if let Value::Integer(idx) = idx {
+            if let Value::Array(array) = array {
+                let idx = idx as usize;
+                if array.borrow().len() > idx {
+                    array.borrow_mut()[idx] = self.top().clone();
+                    Ok(())
+                } else {
+                    Err(self.error(format!("Index {} is out of bounds", idx)))
+                }
+            } else {
+                Err(self.error("Trying to set index of non-array".to_string()))
+            }
+        } else {
+            Err(self.error("Array index must be an integer".to_string()))
+        }
+    }
+
+    fn equal(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left == right));
+        Ok(())
+    }
+
+    fn not_equal(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left != right));
+        Ok(())
+    }
+
+    fn less_than(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left < right));
+        Ok(())
+    }
+
+    fn less_than_equal(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left <= right));
+        Ok(())
+    }
+
+    fn greater_than(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left > right));
+        Ok(())
+    }
+
+    fn greater_than_equal(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        self.push(Value::from(left >= right));
+        Ok(())
+    }
+
+    fn bitwise_and(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        if let Value::Integer(left) = left {
+            if let Value::Integer(right) = right {
+                self.push(Value::from(left & right));
+                Ok(())
+            } else {
+                Err(self.error("Bitwise operations only support integers".to_string()))
+            }
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn bitwise_or(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        if let Value::Integer(left) = left {
+            if let Value::Integer(right) = right {
+                self.push(Value::from(left | right));
+                Ok(())
+            } else {
+                Err(self.error("Bitwise operations only support integers".to_string()))
+            }
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn bitwise_xor(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        if let Value::Integer(left) = left {
+            if let Value::Integer(right) = right {
+                self.push(Value::from(left ^ right));
+                Ok(())
+            } else {
+                Err(self.error("Bitwise operations only support integers".to_string()))
+            }
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn bitwise_not(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+
+        if let Value::Integer(right) = right {
+            self.push(Value::from(!right));
+            Ok(())
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn not(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+
+        self.push(Value::from(!right.is_truthy()));
+        Ok(())
+    }
+
+    fn left_shift(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        if let Value::Integer(left) = left {
+            if let Value::Integer(right) = right {
+                self.push(Value::from(left.wrapping_shl(right as u32)));
+                Ok(())
+            } else {
+                Err(self.error("Bitwise operations only support integers".to_string()))
+            }
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn right_shift(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+
+        if let Value::Integer(left) = left {
+            if let Value::Integer(right) = right {
+                self.push(Value::from(left.wrapping_shr(right as u32)));
+                Ok(())
+            } else {
+                Err(self.error("Bitwise operations only support integers".to_string()))
+            }
+        } else {
+            Err(self.error("Bitwise operations only support integers".to_string()))
+        }
+    }
+
+    fn neg(&mut self) -> Result<(), String> {
+        let right = self.pop()?;
+
+        if let Value::Integer(right) = right {
+            self.push(Value::from(-right));
+            Ok(())
+        } else {
+            Err(self.error("Expected integer in negation expression".to_string()))
+        }
+    }
+
+    fn init_module(&mut self, code: &Vec<u8>) {
+        let name = usize::from_le_bytes(self.next_usize_bytes(&code));
+
+        debug_assert!(self.current_module.is_none());
+        self.current_module = Some(Module::new(
+            self.agent.modules[&name].clone(),
+            self.intrinsics.clone(),
+        ));
+    }
+
+    fn end_module(&mut self) {
+        let module = self.current_module.take();
+        debug_assert!(module.is_some());
+
+        let module = module.unwrap();
+        self.modules.insert(module.name(), module);
+    }
+
+    fn dup(&mut self) {
+        let value = self.top().clone();
+        self.push(value);
+    }
+
+    fn allocate_locals(&mut self, code: &Vec<u8>) {
+        let count = usize::from_le_bytes(self.next_usize_bytes(&code));
+
+        for _ in 0..count {
+            self.push(Value::Null);
+        }
     }
 }
 
@@ -863,7 +1029,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).halt().const_true().end_module();
 
-        let result = interpreter.evaluate(bytecode.into());
+        let result = interpreter._evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -876,7 +1042,7 @@ mod tests {
         bytecode.init_module(0).const_int(123).end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -891,7 +1057,7 @@ mod tests {
 
         let code = bytecode.into();
 
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
         assert_eq!(result, Ok(Value::from(1.23)));
     }
 
@@ -903,7 +1069,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).const_true().end_module();
 
-        let result = interpreter.evaluate(bytecode.into());
+        let result = interpreter._evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::from(true)));
     }
 
@@ -915,7 +1081,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).const_false().end_module();
 
-        let result = interpreter.evaluate(bytecode.into());
+        let result = interpreter._evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::from(false)));
     }
 
@@ -927,7 +1093,7 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode.init_module(0).const_null().end_module();
 
-        let result = interpreter.evaluate(bytecode.into());
+        let result = interpreter._evaluate(bytecode.into());
         assert_eq!(result, Ok(Value::Null));
     }
 
@@ -944,7 +1110,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let code = bytecode.into();
 
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
         assert_eq!(result, Ok(Value::from("hello world")));
     }
 
@@ -962,7 +1128,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(124.23)));
     }
@@ -981,7 +1147,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(121.77)));
     }
@@ -1000,7 +1166,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(246f64)));
     }
@@ -1019,7 +1185,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(62f64)));
     }
@@ -1038,7 +1204,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(0f64)));
     }
@@ -1057,7 +1223,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(16)));
     }
@@ -1083,7 +1249,7 @@ mod tests {
             .end_module();
 
         let code = bytecode.into();
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(48)));
     }
@@ -1114,7 +1280,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(357)));
     }
@@ -1144,7 +1310,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(20)));
     }
@@ -1180,7 +1346,7 @@ mod tests {
         let code: Vec<u8> = bytecode.into();
         crate::compiler::disassemble::disassemble(&agent, &code).unwrap();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -1194,7 +1360,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::Null));
     }
@@ -1213,7 +1379,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -1234,7 +1400,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(234)));
     }
@@ -1254,7 +1420,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from("test")));
     }
@@ -1272,7 +1438,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::Null));
     }
@@ -1294,7 +1460,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(27)));
     }
@@ -1320,7 +1486,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(999)));
     }
@@ -1348,7 +1514,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -1383,7 +1549,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2334)));
     }
@@ -1417,7 +1583,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2334)));
     }
@@ -1445,7 +1611,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from("hello")));
     }
@@ -1509,7 +1675,7 @@ mod tests {
         global.insert(b, Value::Null);
 
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2)));
     }
@@ -1536,7 +1702,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from("hullo")));
     }
@@ -1567,7 +1733,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(3)));
     }
@@ -1581,7 +1747,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(vec![Value::Null; 10])));
     }
@@ -1605,7 +1771,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(123)));
     }
@@ -1632,7 +1798,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1658,7 +1824,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1684,7 +1850,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1713,7 +1879,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1746,7 +1912,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1779,7 +1945,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1812,7 +1978,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1848,7 +2014,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1885,7 +2051,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1922,7 +2088,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(
             result,
@@ -1948,7 +2114,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(-1)));
     }
@@ -1962,7 +2128,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(false)));
     }
@@ -1981,7 +2147,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(16)));
     }
@@ -2000,7 +2166,7 @@ mod tests {
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter.evaluate(code);
+        let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2)));
     }

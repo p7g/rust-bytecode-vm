@@ -15,20 +15,20 @@ use compiler::Compiler;
 use interpreter::Interpreter;
 use value::{FunctionValue, Value};
 
-fn tostring(_: &mut Interpreter, args: Vec<Value>) -> Value {
-    Value::from(format!("{}", args[0]))
+fn tostring(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+    Ok(Value::from(format!("{}", args[0])))
 }
 
-fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Value {
-    Value::from(args[0].type_of())
+fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+    Ok(Value::from(args[0].type_of()))
 }
 
-fn print(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn print(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     print!("{}", args[0]);
-    Value::Null
+    Ok(Value::Null)
 }
 
-fn println(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn println(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     let mut s = String::new();
 
     for (i, v) in args.iter().map(|v| format!("{}", v)).enumerate() {
@@ -40,96 +40,96 @@ fn println(_: &mut Interpreter, args: Vec<Value>) -> Value {
 
     println!("{}", s);
 
-    Value::Null
+    Ok(Value::Null)
 }
 
-fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Integer(n)) = args.get(0) {
-        Value::from(vec![Value::Null; *n as usize])
+        Ok(Value::from(vec![Value::Null; *n as usize]))
     } else {
-        panic!("array_new: Expected int");
+        Err("array_new: Expected int".to_string())
     }
 }
 
-fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
-        Value::from(
+        Ok(Value::from(
             s.chars()
                 .map(|c| Value::from(c.to_string()))
                 .collect::<Vec<_>>(),
-        )
+        ))
     } else {
-        panic!("string_chars: Expected string");
+        Err("string_chars: Expected string".to_string())
     }
 }
 
-fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
-        Value::from(
+        Ok(Value::from(
             s.bytes()
                 .map(|b| Value::from(i64::from(b)))
                 .collect::<Vec<_>>(),
-        )
+        ))
     } else {
-        panic!("string_bytes: Expected string");
+        Err("string_bytes: Expected string".to_string())
     }
 }
 
-fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     let mut buf = String::new();
 
     for arg in args {
         if let Value::String(s) = arg {
             buf += &s;
         } else {
-            panic!("string_concat: Expected string");
+            return Err("string_concat: Expected string".to_string());
         }
     }
 
-    Value::String(buf)
+    Ok(Value::String(buf))
 }
 
-fn ord(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
         if let Some(c) = s.chars().next() {
-            Value::from(c as i64)
+            Ok(Value::from(c as i64))
         } else {
-            panic!("ord: Expected string with length 1, got {:?}", s);
+            Err(format!("ord: Expected string with length 1, got {:?}", s))
         }
     } else {
-        panic!("ord: Expected string with length 1");
+        Err("ord: Expected string with length 1".to_string())
     }
 }
 
-fn chr(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn chr(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Integer(n)) = args.get(0) {
-        Value::from((*n as u8 as char).to_string())
+        Ok(Value::from((*n as u8 as char).to_string()))
     } else {
-        panic!("chr: Expected integer");
+        Err("chr: Expected integer".to_string())
     }
 }
 
-fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Array(vs)) = args.get(0) {
-        Value::from(vs.borrow().len() as i64)
+        Ok(Value::from(vs.borrow().len() as i64))
     } else {
-        panic!("array_length: Expected array");
+        Err(format!("array_length: Expected array, get {:#?}", args))
     }
 }
 
-fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Integer(i)) = args.get(0) {
-        Value::from(i64::from(*i as u32))
+        Ok(Value::from(i64::from(*i as u32)))
     } else {
-        panic!("truncate32: Expected integer");
+        Err("truncate32: Expected integer".to_string())
     }
 }
 
-fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Value {
+fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.first() {
-        Value::from(std::fs::read_to_string(s).expect("Failed to read file"))
+        Ok(Value::from(std::fs::read_to_string(s).map_err(|_| "Failed to read file".to_string())?))
     } else {
-        panic!("read_file: Expected string");
+        Err("read_file: Expected string".to_string())
     }
 }
 
@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut interpreter = Interpreter::with_intrinsics(&mut agent, global);
     interpreter.set_debuginfo(&debuginfo);
-    interpreter.evaluate(code.unwrap())?;
+    interpreter.evaluate(code.unwrap());
 
     Ok(())
 }

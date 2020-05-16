@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Value;
+type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Result<Value, String>;
 
 #[derive(Debug, PartialEq)]
 enum UpvalueValue {
@@ -388,8 +388,8 @@ mod tests {
         assert_eq!(v1, v2);
     }
 
-    fn builtin_function(_: &mut Interpreter, _: Vec<Value>) -> Value {
-        Value::Null
+    fn builtin_function(_: &mut Interpreter, _: Vec<Value>) -> Result<Value, String> {
+        Ok(Value::Null)
     }
 
     #[test]

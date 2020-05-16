@@ -261,6 +261,7 @@ impl<'a> CodeGen<'a> {
 
         self.bytecode
             .op(OpCode::NewFunction)
+            .usize(name.unwrap_or(std::usize::MAX))
             .usize(parameters.len()) // FIXME: This probably won't work with varargs
             .address_of_auto(start_label);
 
