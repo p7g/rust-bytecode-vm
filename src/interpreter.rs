@@ -514,7 +514,10 @@ impl<'a> Interpreter<'a> {
 
     fn return_(&mut self) -> Result<(), String> {
         let retval = self.pop()?;
-        let frame = self.call_stack.pop().ok_or("Trying to return outside of function")?;
+        let frame = self
+            .call_stack
+            .pop()
+            .ok_or("Trying to return outside of function")?;
 
         while let Some(uv) = self.agent.upvalues.pop() {
             if uv.borrow().is_open() {
@@ -1051,8 +1054,8 @@ impl<'a> Interpreter<'a> {
 mod tests {
     use super::*;
     use crate::compiler::bytecode::Bytecode;
-    use crate::module::ModuleSpec;
     use crate::intrinsics::make_intrinsics;
+    use crate::module::ModuleSpec;
     use pretty_assertions::assert_eq;
 
     macro_rules! get_agent {
@@ -2296,11 +2299,7 @@ mod tests {
         let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
-        bytecode
-            .init_module(0)
-            .const_int(1)
-            .neg()
-            .end_module();
+        bytecode.init_module(0).const_int(1).neg().end_module();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -2314,11 +2313,7 @@ mod tests {
         let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
-        bytecode
-            .init_module(0)
-            .const_int(1)
-            .dup()
-            .end_module();
+        bytecode.init_module(0).const_int(1).dup().end_module();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);
@@ -2332,10 +2327,7 @@ mod tests {
         let mut agent = get_agent!();
 
         let mut bytecode = Bytecode::new();
-        bytecode
-            .init_module(0)
-            .allocate_locals(2)
-            .end_module();
+        bytecode.init_module(0).allocate_locals(2).end_module();
 
         let code = bytecode.into();
         let mut interpreter = Interpreter::new(&mut agent);

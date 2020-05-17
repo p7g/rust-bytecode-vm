@@ -158,5 +158,5 @@ pub(crate) fn initialize_global_scope(agent: &mut Agent, global: &mut HashMap<us
 pub(crate) fn make_intrinsics(agent: &mut Agent) -> HashMap<usize, Value> {
     let mut global = HashMap::new();
     initialize_global_scope(agent, &mut global);
-    return global;
+    global
 }
