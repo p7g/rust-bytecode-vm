@@ -93,13 +93,13 @@ impl<'a> Interpreter<'a> {
         self.stack.split_off(self.sp).into_iter().rev().collect()
     }
 
-    fn next_instruction(&mut self, code: &Vec<u8>) -> u8 {
+    fn next_instruction(&mut self, code: &[u8]) -> u8 {
         let inst = code[self.ip];
         self.ip += 1;
         inst
     }
 
-    fn next_usize_bytes(&mut self, code: &Vec<u8>) -> [u8; std::mem::size_of::<usize>()] {
+    fn next_usize_bytes(&mut self, code: &[u8]) -> [u8; std::mem::size_of::<usize>()] {
         const USIZE_SIZE: usize = std::mem::size_of::<usize>();
 
         let array: [u8; USIZE_SIZE] = code[self.ip..self.ip + USIZE_SIZE]
@@ -261,8 +261,9 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn _evaluate(&mut self, code: Vec<u8>) -> Result<Value, String> {
-        if cfg!(vm_debug) {
+        if cfg!(disasm) {
             disassemble(self.agent, &code)?;
         }
 
@@ -401,12 +402,12 @@ impl<'a> Interpreter<'a> {
         })
     }
 
-    fn const_int(&mut self, code: &Vec<u8>) {
+    fn const_int(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(Value::from(i64::from_le_bytes(usize_bytes)));
     }
 
-    fn const_double(&mut self, code: &Vec<u8>) {
+    fn const_double(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(Value::from(f64::from_bits(u64::from_le_bytes(usize_bytes))));
     }
@@ -423,16 +424,16 @@ impl<'a> Interpreter<'a> {
         self.push(Value::from(false));
     }
 
-    fn const_string(&mut self, code: &Vec<u8>) {
+    fn const_string(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(Value::from(self.agent.string_table[idx].as_ref()));
     }
 
-    fn jump(&mut self, code: &Vec<u8>) {
+    fn jump(&mut self, code: &[u8]) {
         self.ip = usize::from_le_bytes(self.next_usize_bytes(&code));
     }
 
-    fn jump_if_true(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn jump_if_true(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
         if cond.is_truthy() {
@@ -441,7 +442,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn jump_if_false(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn jump_if_false(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
         if !cond.is_truthy() {
@@ -450,7 +451,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn call(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn call(&mut self, code: &[u8]) -> Result<(), String> {
         let function = self.pop()?;
         let num_args = usize::from_le_bytes(self.next_usize_bytes(&code));
         if let Value::Function(f) = &function {
@@ -537,17 +538,17 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn load_local(&mut self, code: &Vec<u8>) {
+    fn load_local(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(self.local(usize::from_le_bytes(usize_bytes)).clone());
     }
 
-    fn store_local(&mut self, code: &Vec<u8>) {
+    fn store_local(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.set_local(idx, self.top().clone());
     }
 
-    fn load_global(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn load_global(&mut self, code: &[u8]) -> Result<(), String> {
         let usize_bytes = self.next_usize_bytes(&code);
         let id = usize::from_le_bytes(usize_bytes);
 
@@ -567,7 +568,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn declare_global(&mut self, code: &Vec<u8>) {
+    fn declare_global(&mut self, code: &[u8]) {
         let id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
         if let Some(module) = self.current_module_mut() {
@@ -577,7 +578,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn store_global(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn store_global(&mut self, code: &[u8]) -> Result<(), String> {
         let id = usize::from_le_bytes(self.next_usize_bytes(&code));
         let top = self.top().clone();
 
@@ -596,7 +597,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn new_function(&mut self, code: &Vec<u8>) {
+    fn new_function(&mut self, code: &[u8]) {
         let name = usize::from_le_bytes(self.next_usize_bytes(&code));
         let arity = usize::from_le_bytes(self.next_usize_bytes(&code));
         let address = usize::from_le_bytes(self.next_usize_bytes(&code));
@@ -619,7 +620,7 @@ impl<'a> Interpreter<'a> {
         }));
     }
 
-    fn bind_local(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn bind_local(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = self.locals_index() + usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut func = self.pop()?;
 
@@ -650,7 +651,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn bind_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn bind_upvalue(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut func = self.pop()?;
 
@@ -679,7 +680,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn bind_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn bind_argument(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut func = self.pop()?;
 
@@ -714,7 +715,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn load_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn load_upvalue(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         let idx_or_value = if let Value::Function(function_value) = self.executing_function()? {
             if let FunctionValue::User { upvalues, .. } = function_value.deref() {
@@ -740,7 +741,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn store_upvalue(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn store_upvalue(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         if let Value::Function(function_value) = self.executing_function()? {
             if let FunctionValue::User { upvalues, .. } = function_value.deref() {
@@ -760,19 +761,19 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn load_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn load_argument(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(self.argument(idx)?.clone());
         Ok(())
     }
 
-    fn store_argument(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn store_argument(&mut self, code: &[u8]) -> Result<(), String> {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.set_argument(idx, self.top().clone())?;
         Ok(())
     }
 
-    fn load_from_module(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn load_from_module(&mut self, code: &[u8]) -> Result<(), String> {
         let module_name = usize::from_le_bytes(self.next_usize_bytes(&code));
         let export_name = usize::from_le_bytes(self.next_usize_bytes(&code));
 
@@ -785,12 +786,12 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn new_array(&mut self, code: &Vec<u8>) {
+    fn new_array(&mut self, code: &[u8]) {
         let len = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(Value::from(vec![Value::Null; len]));
     }
 
-    fn new_array_with_values(&mut self, code: &Vec<u8>) -> Result<(), String> {
+    fn new_array_with_values(&mut self, code: &[u8]) -> Result<(), String> {
         let num_values = usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut values = Vec::with_capacity(num_values);
         for _ in 0..num_values {
@@ -1013,7 +1014,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn init_module(&mut self, code: &Vec<u8>) {
+    fn init_module(&mut self, code: &[u8]) {
         let name = usize::from_le_bytes(self.next_usize_bytes(&code));
 
         debug_assert!(self.current_module.is_none());
@@ -1036,7 +1037,7 @@ impl<'a> Interpreter<'a> {
         self.push(value);
     }
 
-    fn allocate_locals(&mut self, code: &Vec<u8>) {
+    fn allocate_locals(&mut self, code: &[u8]) {
         let count = usize::from_le_bytes(self.next_usize_bytes(&code));
 
         self.stack.reserve(count);

@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
     pub fn next_statement(&mut self) -> Option<ParseResult<Statement>> {
         match self.peek() {
             Ok(Some(_)) => Some(self.parse_statement()),
-            Err(msg) => Some(Err(msg.clone())),
+            Err(msg) => Some(Err(msg)),
             Ok(None) => None,
         }
     }
