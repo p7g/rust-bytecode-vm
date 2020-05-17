@@ -61,8 +61,8 @@ pub enum TokenType {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Position {
-    line: usize,
-    column: usize,
+    pub line: usize,
+    pub column: usize,
 }
 
 impl std::fmt::Display for Position {

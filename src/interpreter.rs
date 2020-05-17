@@ -514,7 +514,7 @@ impl<'a> Interpreter<'a> {
 
     fn return_(&mut self) -> Result<(), String> {
         let retval = self.pop()?;
-        let frame = self.call_stack.pop().ok_or("Missing stack frame")?;
+        let frame = self.call_stack.pop().ok_or("Trying to return outside of function")?;
 
         while let Some(uv) = self.agent.upvalues.pop() {
             if uv.borrow().is_open() {
@@ -1041,7 +1041,7 @@ impl<'a> Interpreter<'a> {
         let count = usize::from_le_bytes(self.next_usize_bytes(&code));
 
         self.stack.reserve(count);
-        for _ in 0..count {
+        for _ in 0..=count {
             self.push(Value::Null);
         }
     }
@@ -1052,6 +1052,7 @@ mod tests {
     use super::*;
     use crate::compiler::bytecode::Bytecode;
     use crate::module::ModuleSpec;
+    use crate::intrinsics::make_intrinsics;
     use pretty_assertions::assert_eq;
 
     macro_rules! get_agent {
@@ -2227,5 +2228,296 @@ mod tests {
         let result = interpreter._evaluate(code);
 
         assert_eq!(result, Ok(Value::from(2)));
+    }
+
+    #[test]
+    fn test_calling_builtin_function() {
+        let mut agent = get_agent!();
+        let ident_tostring = agent.intern_string("tostring");
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(3)
+            .load_global(ident_tostring)
+            .call(1)
+            .end_module();
+
+        let code = bytecode.into();
+        let intrinsics = make_intrinsics(&mut agent);
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, intrinsics);
+        let result = interpreter._evaluate(code);
+
+        assert_eq!(result, Ok(Value::from("3")));
+    }
+
+    #[test]
+    fn test_load_from_module() {
+        let mut agent = get_agent!();
+        let ident_testmodule = agent.intern_string("TestModule");
+        let ident_test = agent.intern_string("test");
+
+        let mut modspec = ModuleSpec::new(ident_testmodule);
+        modspec.add_export(ident_test);
+        agent.modules.insert(ident_testmodule, modspec);
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(ident_testmodule)
+            .op(OpCode::Jump)
+            .address_of("after_test")
+            .label("test")
+            .const_int(3)
+            .ret()
+            .label("after_test")
+            .op(OpCode::NewFunction)
+            .usize(ident_test)
+            .usize(0)
+            .address_of("test")
+            .declare_global(ident_test)
+            .store_global(ident_test)
+            .pop()
+            .end_module()
+            .init_module(0)
+            .load_from_module(ident_testmodule, ident_test)
+            .call(0)
+            .end_module();
+
+        let code = bytecode.into();
+        let intrinsics = make_intrinsics(&mut agent);
+        let mut interpreter = Interpreter::with_intrinsics(&mut agent, intrinsics);
+        let result = interpreter._evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(3)));
+    }
+
+    #[test]
+    fn test_neg() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(1)
+            .neg()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(-1)));
+    }
+
+    #[test]
+    fn test_dup() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(1)
+            .dup()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert_eq!(result, Ok(Value::from(true)));
+    }
+
+    #[test]
+    fn test_allocate_locals() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .allocate_locals(2)
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_ok());
+        assert_eq!(interpreter.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_call_not_callable() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(0)
+            .call(0)
+            .pop()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_undefined_global() {
+        let mut agent = get_agent!();
+        let ident_test = agent.intern_string("test");
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .load_global(ident_test)
+            .pop()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_undefined_local() {
+        let mut agent = get_agent!();
+        let ident_test = agent.intern_string("test");
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .load_local(ident_test)
+            .pop()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_get_out_of_bounds() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .new_array(0)
+            .const_int(1)
+            .array_get()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_get_non_array() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(1)
+            .dup()
+            .array_get()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_get_non_int() {
+        let mut agent = get_agent!();
+        let str_test = agent.intern_string("test");
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .new_array(1)
+            .const_string(str_test)
+            .array_get()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_set_out_of_bounds() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .new_array(0)
+            .const_int(1)
+            .dup()
+            .array_set()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_set_non_array() {
+        let mut agent = get_agent!();
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .const_int(1)
+            .dup()
+            .dup()
+            .array_get()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_array_set_non_int() {
+        let mut agent = get_agent!();
+        let str_test = agent.intern_string("test");
+
+        let mut bytecode = Bytecode::new();
+        bytecode
+            .init_module(0)
+            .new_array(1)
+            .const_string(str_test)
+            .dup()
+            .array_get()
+            .end_module();
+
+        let code = bytecode.into();
+        let mut interpreter = Interpreter::new(&mut agent);
+        let result = interpreter._evaluate(code);
+
+        assert!(result.is_err());
     }
 }

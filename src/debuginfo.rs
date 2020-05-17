@@ -3,7 +3,7 @@ use std::iter::Iterator;
 
 use crate::compiler::parser::Position;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Context {
     pub(crate) position: Position,
 }
@@ -46,5 +46,38 @@ impl DebugInfo {
             InfoEntry::Context(c) => c,
             _ => unreachable!(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compiler::parser::Position;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_getting_context() {
+        let mut dbginfo = DebugInfo::new();
+        let pos = Position {
+            line: 10,
+            column: 11,
+        };
+
+        dbginfo.insert(
+            vec![1, 2, 3].into_iter(),
+            Context {
+                position: pos.clone(),
+            },
+        );
+
+        for i in 1..=3 {
+            assert_eq!(
+                dbginfo.get(i),
+                Some(Context {
+                    position: pos.clone()
+                })
+                .as_ref()
+            );
+        }
     }
 }
