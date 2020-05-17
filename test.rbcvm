@@ -17,10 +17,6 @@ function tape_get(tape) {
     return ArrayList.get(tape[1], tape[0]);
 }
 
-function tape_get_char(tape) {
-    return chr(tape_get(tape));
-}
-
 function tape_inc(tape, amount) {
     let reel = tape[1];
     let idx = tape[0];

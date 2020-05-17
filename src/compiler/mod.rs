@@ -63,7 +63,7 @@ impl<'a> Compiler<'a> {
     pub(crate) fn compile<T, P>(&mut self, pwd: P, name: String, text: T) -> Result
     where
         T: AsRef<str>,
-        P: AsRef<Path> + Clone,
+        P: AsRef<Path>,
     {
         if self.compiled_modules.contains(&name) {
             return Ok(());
@@ -76,7 +76,7 @@ impl<'a> Compiler<'a> {
         let parsed_module = parser.parse()?;
 
         for import in parsed_module.imports {
-            self.compile_file(pwd.clone(), import)?;
+            self.compile_file(&pwd, import)?;
         }
 
         self.agent
@@ -90,6 +90,8 @@ impl<'a> Compiler<'a> {
 
         self.bytecode
             .replace(gen.compile(parsed_module.spec, parsed_module.statements.iter())?);
+
+        self.compiled_modules.insert(name);
 
         Ok(())
     }
