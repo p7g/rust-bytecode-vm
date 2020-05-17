@@ -1049,6 +1049,7 @@ mod tests {
         let mut bc = Bytecode::new();
         bc.init_module(ident_test)
             .op(OpCode::NewFunction)
+            .usize(ident_test)
             .usize(0)
             .address_of("start")
             .declare_global(ident_test)
@@ -1295,6 +1296,7 @@ mod tests {
         let mut bc = Bytecode::new();
         bc.init_module(ident_test)
             .op(OpCode::NewFunction)
+            .usize(ident_test)
             .usize(0)
             .address_of("test")
             .declare_global(ident_test)
@@ -1340,6 +1342,7 @@ mod tests {
         let mut bc = Bytecode::new();
         bc.init_module(ident_test)
             .op(OpCode::NewFunction)
+            .usize(ident_test)
             .usize(1)
             .address_of("test")
             .declare_global(ident_test)
@@ -1366,6 +1369,7 @@ mod tests {
         let mut bc = Bytecode::new();
         bc.init_module(ident_test)
             .op(OpCode::NewFunction)
+            .usize(ident_test)
             .usize(0)
             .address_of("test")
             .declare_global(ident_test)
@@ -1378,6 +1382,7 @@ mod tests {
             .const_null()
             .store_local(0)
             .op(OpCode::NewFunction)
+            .usize(std::usize::MAX)
             .usize(0)
             .address_of("inner")
             .op(OpCode::Jump)
@@ -1493,6 +1498,7 @@ mod tests {
         let mut bc = Bytecode::new();
         bc.init_module(ident_test)
             .op(OpCode::NewFunction)
+            .usize(std::usize::MAX)
             .usize(0)
             .address_of("func")
             .op(OpCode::Jump)
