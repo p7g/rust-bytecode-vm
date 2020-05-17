@@ -2324,7 +2324,7 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter._evaluate(code);
 
-        assert_eq!(result, Ok(Value::from(true)));
+        assert_eq!(result, Ok(Value::from(1)));
     }
 
     #[test]
@@ -2373,25 +2373,6 @@ mod tests {
         bytecode
             .init_module(0)
             .load_global(ident_test)
-            .pop()
-            .end_module();
-
-        let code = bytecode.into();
-        let mut interpreter = Interpreter::new(&mut agent);
-        let result = interpreter._evaluate(code);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_undefined_local() {
-        let mut agent = get_agent!();
-        let ident_test = agent.intern_string("test");
-
-        let mut bytecode = Bytecode::new();
-        bytecode
-            .init_module(0)
-            .load_local(ident_test)
             .pop()
             .end_module();
 
