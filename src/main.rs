@@ -9,8 +9,8 @@ mod opcode;
 mod value;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::io::{self, Write};
+use std::rc::Rc;
 
 use agent::Agent;
 use compiler::Compiler;
