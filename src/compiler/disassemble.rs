@@ -26,15 +26,15 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
     }
 
     while let Some(instruction) = next!() {
-        print!("{}: ", ip - 1);
+        eprint!("{}: ", ip - 1);
         let instruction = OpCode::from(instruction);
         match instruction {
             OpCode::ConstInt => {
-                println!("{:?}({:?})", instruction, i64::from_le_bytes(next!(usize)));
+                eprintln!("{:?}({:?})", instruction, i64::from_le_bytes(next!(usize)));
             }
 
             OpCode::ConstDouble => {
-                println!(
+                eprintln!(
                     "{:?}({:?})",
                     instruction,
                     f64::from_bits(u64::from_le_bytes(next!(usize))),
@@ -57,7 +57,7 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::NewArray
             | OpCode::NewArrayWithValues
             | OpCode::AllocateLocals => {
-                println!(
+                eprintln!(
                     "{:?}({:?})",
                     instruction,
                     usize::from_le_bytes(next!(usize))
@@ -70,11 +70,11 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::ConstString
             | OpCode::InitModule => {
                 let idx = usize::from_le_bytes(next!(usize));
-                println!("{:?}({} ({}))", instruction, agent.string_table[idx], idx,);
+                eprintln!("{:?}({:?} ({}))", instruction, agent.string_table[idx], idx,);
             }
 
             OpCode::LoadFromModule => {
-                println!(
+                eprintln!(
                     "{:?}({}.{})",
                     instruction,
                     agent.string_table[usize::from_le_bytes(next!(usize))],
@@ -83,7 +83,7 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             }
 
             OpCode::NewFunction => {
-                println!(
+                eprintln!(
                     "{:?}({:?}, {:?}, {:?})",
                     instruction,
                     usize::from_le_bytes(next!(usize)),
@@ -121,7 +121,7 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::RightShift
             | OpCode::Neg
             | OpCode::EndModule
-            | OpCode::Dup => println!("{:?}", instruction),
+            | OpCode::Dup => eprintln!("{:?}", instruction),
         }
     }
 
