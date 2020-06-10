@@ -4,6 +4,7 @@ pub(crate) mod bytecode;
 pub(crate) mod codegen;
 pub(crate) mod disassemble;
 pub(crate) mod parser;
+pub(crate) mod opt;
 
 use std::collections::HashSet;
 use std::convert::AsRef;
