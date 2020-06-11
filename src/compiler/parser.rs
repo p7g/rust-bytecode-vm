@@ -1011,12 +1011,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_char_expression(&mut self, c: Token) -> ParseResult<Expression> {
-        if let Some(charval) = c.text.chars().nth(0) {
+        if let Some(charval) = c.text.chars().next() {
             Ok(Expression {
                 position: c.position,
                 value: ExpressionKind::Char(charval),
             })
-        } else { unreachable!() }
+        } else {
+            unreachable!()
+        }
     }
 
     fn parse_null_expression(&mut self, null: Token) -> ParseResult<Expression> {

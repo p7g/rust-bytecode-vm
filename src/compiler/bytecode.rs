@@ -1,6 +1,6 @@
 use crate::opcode::OpCode;
 use std::collections::HashMap;
-use std::convert::{TryFrom};
+use std::convert::TryFrom;
 
 pub struct Bytecode {
     pub instructions: Vec<u8>,

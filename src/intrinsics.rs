@@ -44,11 +44,7 @@ fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
 
 fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
-        Ok(Value::from(
-            s.chars()
-                .map(|c| Value::from(c))
-                .collect::<Vec<_>>(),
-        ))
+        Ok(Value::from(s.chars().map(Value::from).collect::<Vec<_>>()))
     } else {
         Err("string_chars: Expected string".to_string())
     }
@@ -84,7 +80,7 @@ fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Char(c)) = args.get(0) {
         Ok(Value::from(*c as i64))
     } else {
-        Err(format!("ord: Expected char"))
+        Err("ord: Expected char".to_string())
     }
 }
 
