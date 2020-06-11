@@ -11,5 +11,6 @@
 - [ ] varargs
 - [x] native functions should return `Result<Value, Error>`
 - [ ] change all the `Result<_, String>` to some proper error type
+- [ ] switch case: when cases are all suitable, should be a jump table kinda thing
 
 [1]: http://erlang.org/doc/reference_manual/records.html

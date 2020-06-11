@@ -4,13 +4,12 @@ import "lib/array.rbcvm";
 import "lib/arraylist.rbcvm";
 import "lib/hash.rbcvm";
 import "lib/hashmap.rbcvm";
+import "lib/iter.rbcvm";
 import "lib/result.rbcvm";
 import "lib/string.rbcvm";
 
 function tape_new() {
-    let arr = ArrayList.new();
-    ArrayList.push(arr, 0);
-    return [0, arr];
+    return [0, ArrayList.from_array(1, [0])];
 }
 
 function tape_get(tape) {
@@ -39,19 +38,6 @@ function op(type, value) {
     return [type, value];
 }
 
-function iterator(array) {
-    let index = 0;
-    let len = Array.length(array);
-    return function() {
-        if index == len {
-            return null;
-        }
-        let item = array[index];
-        index = index + 1;
-        return item;
-    };
-}
-
 function _bf_parse(next_char) {
     let code = ArrayList.new();
 
@@ -77,11 +63,11 @@ function _bf_parse(next_char) {
 }
 
 function bf_parse(program) {
-    return _bf_parse(iterator(String.chars(program)));
+    return _bf_parse(Iter.from_array(String.chars(program)));
 }
 
-function _bf_run(next_op, tape) {
-    for let op; (op = next_op()) != null; {
+function _bf_run(ops, tape) {
+    Iter.foreach(ops, function(op) {
         let type = op[0];
         let value = op[1];
 
@@ -93,14 +79,14 @@ function _bf_run(next_op, tape) {
             print(chr(tape_get(tape)));
         } else if type == OP_LOOP {
             while tape_get(tape) != 0 {
-                _bf_run(iterator(value), tape);
+                _bf_run(Iter.from_array(value), tape);
             }
         }
-    }
+    });
 }
 
 function bf_run(ops) {
-    _bf_run(iterator(ops), tape_new());
+    _bf_run(Iter.from_array(ops), tape_new());
 }
 
 let prog = "
