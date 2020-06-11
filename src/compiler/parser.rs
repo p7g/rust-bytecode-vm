@@ -215,6 +215,7 @@ impl<'a> Lexer<'a> {
                         'r' => '\r',
                         't' => '\t',
                         '"' => '"',
+                        '\'' => '\'',
                         _ => return error!("unrecognized escape sequence"),
                     }
                 } else {
