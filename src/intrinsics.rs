@@ -46,7 +46,7 @@ fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> 
     if let Some(Value::String(s)) = args.get(0) {
         Ok(Value::from(
             s.chars()
-                .map(|c| Value::from(c.to_string()))
+                .map(|c| Value::from(c))
                 .collect::<Vec<_>>(),
         ))
     } else {
@@ -81,20 +81,16 @@ fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String>
 }
 
 fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
-    if let Some(Value::String(s)) = args.get(0) {
-        if let Some(c) = s.chars().next() {
-            Ok(Value::from(c as i64))
-        } else {
-            Err(format!("ord: Expected string with length 1, got {:?}", s))
-        }
+    if let Some(Value::Char(c)) = args.get(0) {
+        Ok(Value::from(*c as i64))
     } else {
-        Err("ord: Expected string with length 1".to_string())
+        Err(format!("ord: Expected char"))
     }
 }
 
 fn chr(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     if let Some(Value::Integer(n)) = args.get(0) {
-        Ok(Value::from((*n as u8 as char).to_string()))
+        Ok(Value::from(*n as u8 as char))
     } else {
         Err("chr: Expected integer".to_string())
     }
