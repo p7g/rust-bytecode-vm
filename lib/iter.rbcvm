@@ -77,6 +77,25 @@ export function map(it, fn) {
   };
 }
 
+export function take(it, n) {
+  let i = 0;
+  return function() {
+    if i >= n {
+      return null;
+    }
+    i = i + 1;
+    return it();
+  };
+}
+
+export function drop(it, n) {
+  for let i = 0; i < n; i = i + 1 {
+    it();
+  }
+
+  return it;
+}
+
 export function take_while(it, pred) {
   let done = false;
 
@@ -92,5 +111,17 @@ export function take_while(it, pred) {
     }
 
     return val;
+  };
+}
+
+export function zip(a, b) {
+  return function() {
+    let val_a = a();
+    let val_b = b();
+
+    if a == null && b == null {
+      return null;
+    }
+    return [val_a, val_b];
   };
 }

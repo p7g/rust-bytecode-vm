@@ -1,25 +1,63 @@
 module String;
 
 import "array.rbcvm";
+import "char.rbcvm";
+import "fn.rbcvm";
+import "iter.rbcvm";
+import "op.rbcvm";
 
 export function chars(str) {
   return string_chars(str);
+}
+
+export function from_chars(cs) {
+  return string_from_chars(cs);
 }
 
 export function bytes(str) {
   return string_bytes(str);
 }
 
-export function parse_number(str, base) {
+export function parse_integer(str, base) {
   let sum = 0;
   let cs = chars(str);
   Array.reverse(cs);
 
   Array.foreach(cs, function(char, i) {
-    if is_digit(char) {
-      sum = sum + to_digit(char) * base ** i;
+    if Char.is_digit(char) {
+      sum = sum + Char.to_digit(char) * base ** i;
     }
   });
+
+  return sum;
+}
+
+export function parse_float(str) {
+  let sum = 0.0;
+  let negate = false;
+  let chars = chars(str);
+
+  if chars[0] == '-' {
+    negate = true;
+  }
+
+  chars = Iter.from_array(chars);
+  if negate {
+    chars = Iter.drop(chars, 1);
+  }
+
+  let integer_chars = Iter.drain(Iter.take_while(chars, Fn.curry(Op.ne, '.')));
+  sum = sum + parse_integer(from_chars(integer_chars), 10);
+
+  Iter.foreach(Iter.enumerate(chars), function(ic) {
+    let i = ic[0];
+    let c = ic[1];
+    sum = sum + tofloat(Char.to_digit(c)) / 10 ** (i + 1);
+  });
+
+  if negate {
+    sum = sum * -1;
+  }
 
   return sum;
 }

@@ -34,3 +34,7 @@ export function to_uppercase(c) {
 export function to_lowercase(c) {
   return chr(ord(c) | UPCASE_MASK);
 }
+
+export function to_digit(c) {
+  return ord(c) - ZERO;
+}

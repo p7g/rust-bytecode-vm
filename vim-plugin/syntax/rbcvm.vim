@@ -64,7 +64,7 @@ syntax keyword jsConditional            else                   skipwhite skipemp
 syntax keyword jsRepeat                 while for              skipwhite skipempty nextgroup=jsParenRepeat,jsForAwait
 
 " Keywords
-syntax keyword jsBuiltins           print println tostring type_of array_new array_length string_chars string_bytes string_concat chr ord truncate32 read_file
+syntax keyword jsBuiltins           print println tostring tofloat type_of array_new array_length string_chars string_from_chars string_bytes string_concat chr ord truncate32 read_file
 
 " Code blocks
 syntax region  jsBracket                      matchgroup=jsBrackets            start=/\[/ end=/\]/ contains=@jsExpression extend fold
