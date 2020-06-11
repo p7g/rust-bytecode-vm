@@ -1,5 +1,6 @@
 module Test2;
 
+import "lib/array.rbcvm";
 import "lib/fn.rbcvm";
 
 function test(a, b) {
@@ -13,5 +14,20 @@ function test2(a, b, c) {
     return a * b + c;
 }
 
-let add24 = Fn.partial(test2, [2, 12]);
-println(add24(5));
+# let add24 = Fn.partial(test2, [2, 12]);
+# println(add24(5));
+
+function a(arg) {
+    return string_concat(arg, "a");
+}
+
+function b(arg) {
+    return string_concat(arg, "b");
+}
+
+function c(arg) {
+    return string_concat(arg, "c");
+}
+
+println(Fn.chain([a, b, c])("test: "));
+println(Fn.compose([a, b, c])("test: "));

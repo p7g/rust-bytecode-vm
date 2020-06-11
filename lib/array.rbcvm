@@ -65,7 +65,7 @@ export function foldl1(self, reducer) {
     acc = reducer(acc, item, i, self);
   }
 
-  return item;
+  return acc;
 }
 
 export function reverse(self) {
@@ -78,4 +78,15 @@ export function reverse(self) {
     self[i] = self[len - i - 1];
     self[len - i - 1] = tmp;
   }
+}
+
+export function reversed(self) {
+  let len = length(self);
+  let copy = new(len);
+
+  for let i = 0; i < len; i = i + 1 {
+    copy[len - i - 1] = self[i];
+  }
+
+  return copy;
 }

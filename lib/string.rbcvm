@@ -23,13 +23,3 @@ export function parse_number(str, base) {
 
   return sum;
 }
-
-export function to_digit(char) {
-  return ord(char) - 48;
-}
-
-export function is_digit(char) {
-  let charcode = ord(char);
-
-  return charcode >= 48 && charcode <= 57;
-}
