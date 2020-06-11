@@ -35,14 +35,6 @@ let OP_MOVE = 1;
 let OP_LOOP = 2;
 let OP_PRINT = 3;
 
-let TOK_PLUS = ord("+");
-let TOK_MINUS = ord("-");
-let TOK_LEFT = ord("<");
-let TOK_RIGHT = ord(">");
-let TOK_DOT = ord(".");
-let TOK_LEFTBRACKET = ord("[");
-let TOK_RIGHTBRACKET = ord("]");
-
 function op(type, value) {
     return [type, value];
 }
@@ -64,19 +56,19 @@ function _bf_parse(next_char) {
     let code = ArrayList.new();
 
     for let c; (c = next_char()) != null; {
-        if c == TOK_PLUS {
+        if c == '+' {
             ArrayList.push(code, op(OP_INC, 1));
-        } else if c == TOK_MINUS {
+        } else if c == '-' {
             ArrayList.push(code, op(OP_INC, -1));
-        } else if c == TOK_RIGHT {
+        } else if c == '>' {
             ArrayList.push(code, op(OP_MOVE, 1));
-        } else if c == TOK_LEFT {
+        } else if c == '<' {
             ArrayList.push(code, op(OP_MOVE, -1));
-        } else if c == TOK_DOT {
+        } else if c == '.' {
             ArrayList.push(code, op(OP_PRINT, null));
-        } else if c == TOK_LEFTBRACKET {
+        } else if c == '[' {
             ArrayList.push(code, op(OP_LOOP, _bf_parse(next_char)));
-        } else if c == TOK_RIGHTBRACKET {
+        } else if c == ']' {
             break;
         }
     }
@@ -85,7 +77,7 @@ function _bf_parse(next_char) {
 }
 
 function bf_parse(program) {
-    return _bf_parse(iterator(String.bytes(program)));
+    return _bf_parse(iterator(String.chars(program)));
 }
 
 function _bf_run(next_op, tape) {
@@ -171,7 +163,7 @@ let warmup = "
 <-]<-]<-]<-]<-]++++++++++
 ";
 
-bf_run(bf_parse(prog));
+bf_run(bf_parse(hello));
 
 # import "lib/json.rbcvm";
 
