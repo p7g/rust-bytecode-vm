@@ -81,12 +81,13 @@ export function take_while(it, pred) {
   let done = false;
 
   return function() {
+    if done {
+      return null;
+    }
+
     let val = it();
     if !pred(val) {
       done = true;
-    }
-
-    if done {
       return null;
     }
 
