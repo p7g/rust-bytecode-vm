@@ -10,6 +10,7 @@ pub enum TokenType {
     Integer,
     Double,
     String,
+    Char,
     Null,
     LeftBracket,
     RightBracket,
@@ -96,6 +97,7 @@ impl Token {
             TokenType::Integer => 0,
             TokenType::Double => 0,
             TokenType::String => 0,
+            TokenType::Char => 0,
             TokenType::Null => 0,
 
             TokenType::Equal => 1,
@@ -203,6 +205,22 @@ impl<'a> Lexer<'a> {
             ($message:expr $(, $stuff:expr)* $(,)?) => {
                 Some(Err(self.error(format!($message, $($stuff)*))))
             };
+        }
+
+        macro_rules! escape_sequence {
+            () => {{
+                if let Some(c) = self.next_char() {
+                    match c {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '"' => '"',
+                        _ => return error!("unrecognized escape sequence"),
+                    }
+                } else {
+                    return error!("unterminated escape sequence");
+                }
+            }};
         }
 
         while let Some(c) = self.next_char() {
@@ -323,23 +341,30 @@ impl<'a> Lexer<'a> {
                     }
                 }
 
+                '\'' => {
+                    let c = match self.next_char() {
+                        Some('\\') => escape_sequence!(),
+                        Some(c) => c,
+                        None => return error!("Unterminated character literal"),
+                    };
+
+                    self.next_char();
+
+                    return Some(Ok(Token::new(
+                        TokenType::Char,
+                        start_line,
+                        start_column,
+                        c.to_string(),
+                    )));
+                }
+
                 '"' => {
                     let mut buf = String::new();
                     while let Some(c) = self.peek_char() {
                         match c {
                             '\\' => {
                                 self.next_char();
-                                if let Some(c) = self.next_char() {
-                                    match c {
-                                        'n' => buf.push('\n'),
-                                        'r' => buf.push('\r'),
-                                        't' => buf.push('\t'),
-                                        '"' => buf.push('"'),
-                                        _ => return error!("unrecognized escape sequence"),
-                                    }
-                                } else {
-                                    return error!("unterminated escape sequence");
-                                }
+                                buf.push(escape_sequence!());
                             }
                             '"' => {
                                 self.next_char();
@@ -429,6 +454,7 @@ pub enum ExpressionKind {
     Integer(i64),
     Double(f64),
     String(usize),
+    Char(char),
     Boolean(bool),
     Null,
     Array(Vec<Expression>),
@@ -870,6 +896,7 @@ impl<'a> Parser<'a> {
             TokenType::Integer => self.parse_integer_expression(token),
             TokenType::Double => self.parse_double_expression(token),
             TokenType::String => self.parse_string_expression(token),
+            TokenType::Char => self.parse_char_expression(token),
             TokenType::True | TokenType::False => self.parse_boolean_expression(token),
             TokenType::Null => self.parse_null_expression(token),
             TokenType::LeftParen => self.parse_parenthesized_expression(token),
@@ -980,6 +1007,15 @@ impl<'a> Parser<'a> {
             position: string.position,
             value: ExpressionKind::String(id),
         })
+    }
+
+    fn parse_char_expression(&mut self, c: Token) -> ParseResult<Expression> {
+        if let Some(charval) = c.text.chars().nth(0) {
+            Ok(Expression {
+                position: c.position,
+                value: ExpressionKind::Char(charval),
+            })
+        } else { unreachable!() }
     }
 
     fn parse_null_expression(&mut self, null: Token) -> ParseResult<Expression> {
@@ -2468,5 +2504,15 @@ return 1;
     #[test]
     fn test_boolean_expression_false() {
         test_expression!("false;", ExpressionKind::Boolean(false),);
+    }
+
+    #[test]
+    fn test_char_literal() {
+        test_expression!("'c';", ExpressionKind::Char('c'),);
+    }
+
+    #[test]
+    fn test_char_escape_sequence() {
+        test_expression!(r#"'\n';"#, ExpressionKind::Char('\n'),);
     }
 }

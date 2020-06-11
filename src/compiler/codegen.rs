@@ -635,6 +635,7 @@ impl<'a> CodeGen<'a> {
             ExpressionKind::Integer(_) => self.compile_integer_expression(state, expression),
             ExpressionKind::Double(_) => self.compile_double_expression(state, expression),
             ExpressionKind::String(_) => self.compile_string_expression(state, expression),
+            ExpressionKind::Char(_) => self.compile_char_expression(state, expression),
             ExpressionKind::Null => self.compile_null_expression(state, expression),
             ExpressionKind::Boolean(_) => self.compile_boolean_expression(state, expression),
             ExpressionKind::Array(_) => self.compile_array_expression(state, expression),
@@ -728,6 +729,20 @@ impl<'a> CodeGen<'a> {
     ) -> CompileResult<()> {
         if let ExpressionKind::String(s) = expression.value {
             self.bytecode.const_string(s);
+
+            Ok(())
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn compile_char_expression(
+        &mut self,
+        _state: &mut CompilerState,
+        expression: &Expression,
+    ) -> CompileResult<()> {
+        if let ExpressionKind::Char(c) = expression.value {
+            self.bytecode.const_char(c);
 
             Ok(())
         } else {

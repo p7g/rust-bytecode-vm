@@ -164,6 +164,7 @@ pub enum Value {
     Boolean(bool),
     Null,
     String(Rc<String>),
+    Char(char),
     Array(Rc<RefCell<Box<[Value]>>>),
     Function(Rc<FunctionValue>),
 }
@@ -176,6 +177,7 @@ impl Value {
             Value::Boolean(_) => "boolean",
             Value::Null => "null",
             Value::String(_) => "string",
+            Value::Char(_) => "char",
             Value::Array(_) => "array",
             Value::Function(_) => "function",
         }
@@ -187,6 +189,7 @@ impl Value {
             Value::Double(n) => *n != 0f64,
             Value::Boolean(b) => *b,
             Value::String(s) => !s.is_empty(),
+            Value::Char(_) => true,
             Value::Array(vs) => !vs.borrow().is_empty(),
             Value::Function(_) => true,
             Value::Null => false,
@@ -198,6 +201,7 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Value::String(s) => write!(f, "{}", s),
+            Value::Char(c) => write!(f, "{}", c),
             Value::Integer(n) => write!(f, "{}", n),
             Value::Double(n) => write!(f, "{}", n),
             Value::Boolean(b) => write!(f, "{}", b),
@@ -256,6 +260,13 @@ impl PartialEq for Value {
                     } else {
                         a.chars().zip(b.chars()).all(|(a, b)| a == b)
                     }
+                } else {
+                    false
+                }
+            }
+            Value::Char(a) => {
+                if let Value::Char(b) = other {
+                    a == b
                 } else {
                     false
                 }
@@ -327,6 +338,12 @@ impl From<&str> for Value {
 impl From<String> for Value {
     fn from(s: String) -> Value {
         Value::String(Rc::new(s))
+    }
+}
+
+impl From<char> for Value {
+    fn from(c: char) -> Value {
+        Value::Char(c)
     }
 }
 

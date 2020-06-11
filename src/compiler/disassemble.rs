@@ -1,5 +1,6 @@
 use crate::agent::Agent;
 use crate::opcode::OpCode;
+use std::convert::TryFrom;
 
 pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
     let mut ip = 0;
@@ -38,6 +39,14 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
                     "{:?}({:?})",
                     instruction,
                     f64::from_bits(u64::from_le_bytes(next!(usize))),
+                );
+            }
+
+            OpCode::ConstChar => {
+                eprintln!(
+                    "{:?}({:?})",
+                    instruction,
+                    char::try_from(usize::from_le_bytes(next!(usize)) as u32).unwrap()
                 );
             }
 

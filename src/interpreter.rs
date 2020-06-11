@@ -333,6 +333,7 @@ impl<'a> Interpreter<'a> {
                 OpCode::ConstTrue => self.const_true(),
                 OpCode::ConstFalse => self.const_false(),
                 OpCode::ConstString => self.const_string(&code),
+                OpCode::ConstChar => self.const_char(&code),
 
                 OpCode::Add => number_binop!("addition", i64::wrapping_add, f64::add),
                 OpCode::Sub => number_binop!("subtraction", i64::wrapping_sub, f64::sub),
@@ -427,6 +428,13 @@ impl<'a> Interpreter<'a> {
     fn const_string(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(Value::from(self.agent.string_table[idx].as_ref()));
+    }
+
+    fn const_char(&mut self, code: &[u8]) {
+        let c: char = (usize::from_le_bytes(self.next_usize_bytes(&code)) as u32)
+            .try_into()
+            .unwrap();
+        self.push(Value::from(c));
     }
 
     fn jump(&mut self, code: &[u8]) {

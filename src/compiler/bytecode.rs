@@ -1,5 +1,6 @@
 use crate::opcode::OpCode;
 use std::collections::HashMap;
+use std::convert::{TryFrom};
 
 pub struct Bytecode {
     pub instructions: Vec<u8>,
@@ -116,6 +117,10 @@ impl Bytecode {
         self
     }
 
+    pub fn char(&mut self, c: char) -> &mut Bytecode {
+        self.usize(u32::try_from(c).unwrap() as usize)
+    }
+
     pub fn halt(&mut self) -> &mut Bytecode {
         self.op(OpCode::Halt)
     }
@@ -142,6 +147,10 @@ impl Bytecode {
 
     pub fn const_string(&mut self, id: usize) -> &mut Bytecode {
         self.op(OpCode::ConstString).usize(id)
+    }
+
+    pub fn const_char(&mut self, c: char) -> &mut Bytecode {
+        self.op(OpCode::ConstChar).char(c)
     }
 
     pub fn add(&mut self) -> &mut Bytecode {

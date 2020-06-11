@@ -5,6 +5,7 @@ pub enum OpCode {
     ConstInt,
     ConstDouble,
     ConstString,
+    ConstChar,
     ConstTrue,
     ConstFalse,
     ConstNull,
