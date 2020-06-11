@@ -43,6 +43,8 @@ syntax keyword rbcvmModule module skipwhite skipempty
 
 " Strings, Templates, Numbers
 syntax region  jsString           start=+"+  skip=+\\"+  end=+"+     contains=@Spell extend
+syntax match   rbcvmChar          /'\%(\\[rntb']\|[^'\\]\)'/
+
 syntax match   jsNumber           /\c\<\%(\d\+\%(e[+-]\=\d\+\)\=\|0b[01]\+\|0o\o\+\|0x\x\+\)\>/
 syntax keyword jsNumber           Infinity
 syntax match   jsFloat            /\c\<\%(\d\+\.\d\+\|\d\+\.\|\.\d\+\)\%(e[+-]\=\d\+\)\=\>/
@@ -96,7 +98,7 @@ if exists("javascript_plugin_jsdoc")
   runtime extras/jsdoc.vim
 endif
 
-syntax cluster jsExpression  contains=jsBracket,jsParen,jsString,jsNumber,jsFloat,jsOperator,jsBooleanTrue,jsBooleanFalse,jsNull,jsFunction,jsFuncCall,jsNan,jsBuiltins,jsNoise,jsComment,jsStatement,jsDot
+syntax cluster jsExpression  contains=jsBracket,jsParen,jsString,rbcvmChar,jsNumber,jsFloat,jsOperator,jsBooleanTrue,jsBooleanFalse,jsNull,jsFunction,jsFuncCall,jsNan,jsBuiltins,jsNoise,jsComment,jsStatement,jsDot
 syntax cluster jsAll         contains=@jsExpression,jsStorageClass,jsConditional,jsRepeat,jsReturn,jsNoise
 
 " Define the default highlighting.
@@ -115,7 +117,7 @@ if version >= 508 || !exists("did_javascript_syn_inits")
   HiLink jsParensRepeat         jsParens
   HiLink jsCommentTodo          Todo
   HiLink jsString               String
-  HiLink jsCharacter            Character
+  HiLink rbcvmChar              Character
   HiLink jsConditional          Conditional
   HiLink jsBranch               Conditional
   HiLink jsReturn               Statement
