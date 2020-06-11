@@ -537,7 +537,7 @@ impl<'a> Parser<'a> {
             .collect::<ParseResult<Vec<_>>>()?;
 
         Ok(ParsedModule {
-            spec: self.module.take().unwrap(),
+            spec: self.module.take().expect("Missing module header"),
             imports,
             statements: statements.into_iter().collect::<ParseResult<Vec<_>>>()?,
         })
