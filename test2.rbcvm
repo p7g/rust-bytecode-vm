@@ -2,13 +2,15 @@ module Test2;
 
 import "lib/array.rbcvm";
 import "lib/fn.rbcvm";
+import "lib/hashmap.rbcvm";
+import "lib/obj.rbcvm";
 
 function test(a, b) {
     return a + b;
 }
 
 let add2 = Fn.curry(test, 2);
-println(add2(3));
+# println(add2(3));
 
 function test2(a, b, c) {
     return a * b + c;
@@ -29,5 +31,5 @@ function c(arg) {
     return string_concat(arg, "c");
 }
 
-println(Fn.chain([a, b, c])("test: "));
-println(Fn.compose([a, b, c])("test: "));
+# println(Fn.chain([a, b, c])("test: "));
+# println(Fn.compose([a, b, c])("test: "));

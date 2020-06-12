@@ -102,3 +102,18 @@ export function delete(self, key) {
   }
   return false;
 }
+
+export function make_with_hash_function(hash, init_fn) {
+  let map = new();
+  set_hash_function(map, hash);
+
+  init_fn(function(k, v) {
+    set(map, k, v);
+  });
+
+  return map;
+}
+
+export function make(init_fn) {
+  return make_with_hash_function(hash_string, init_fn);
+}
