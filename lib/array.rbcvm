@@ -1,12 +1,7 @@
 module Array;
 
-export function new(length) {
-  return array_new(length);
-}
-
-export function length(self) {
-  return array_length(self);
-}
+export let new = array_new;
+export let length = array_length;
 
 export function find(self, func) {
   let len = length(self);
@@ -89,4 +84,12 @@ export function reversed(self) {
   }
 
   return copy;
+}
+
+export function slice(self, start, end) {
+    let sub = new(end - start);
+    for let i = start; i < end; i = i + 1 {
+        sub[i - start] = self[i];
+    }
+    return sub;
 }

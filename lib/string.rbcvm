@@ -6,17 +6,9 @@ import "fn.rbcvm";
 import "iter.rbcvm";
 import "op.rbcvm";
 
-export function chars(str) {
-  return string_chars(str);
-}
-
-export function from_chars(cs) {
-  return string_from_chars(cs);
-}
-
-export function bytes(str) {
-  return string_bytes(str);
-}
+export let chars = string_chars;
+export let from_chars = string_from_chars;
+export let bytes = string_bytes;
 
 export function parse_integer(str, base) {
   let sum = 0;
@@ -60,4 +52,9 @@ export function parse_float(str) {
   }
 
   return sum;
+}
+
+export function slice(self, start, end) {
+    let cs = chars(self);
+    return from_chars(Array.slice(cs, start, end));
 }

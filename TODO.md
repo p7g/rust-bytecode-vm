@@ -5,18 +5,18 @@
     - precedence
 - [x] add function expression
 - [x] replace string escapes with actual characters in lexer
-- [ ] write compiler (AST -> bytecode)
+- [x] write compiler (AST -> bytecode)
     - [x] statements
     - [x] expressions
     - [x] tests
-- [ ] import/export
+- [x] import/export
     - decide: happens at runtime (by VM) or before
 - [ ] standard library stuff
-    - dynamic array
-    - hashmap
-    - string manipulation functions
-    - regular expressions
-    - networking
+    - [x] dynamic array
+    - [x] hashmap
+    - [x] string manipulation functions
+    - [ ] regular expressions
+    - [ ] networking
 - [ ] async/await
     - promises or futures? (what's the difference?)
     - tokio or mio or something

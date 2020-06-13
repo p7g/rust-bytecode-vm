@@ -347,9 +347,17 @@ impl From<char> for Value {
     }
 }
 
-impl From<Vec<Value>> for Value {
-    fn from(vs: Vec<Value>) -> Value {
-        Value::Array(Rc::new(RefCell::new(vs.into_boxed_slice())))
+impl<T> From<Vec<T>> for Value
+where
+    Value: From<T>,
+{
+    fn from(vs: Vec<T>) -> Value {
+        Value::Array(Rc::new(RefCell::new(
+            vs.into_iter()
+                .map(Value::from)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )))
     }
 }
 
@@ -555,7 +563,7 @@ mod tests {
     #[test]
     fn test_array_truthiness() {
         let a = Value::from(vec![Value::Null]);
-        let b = Value::from(Vec::new());
+        let b = Value::from(Vec::<Value>::new());
 
         assert!(a.is_truthy());
         assert!(!b.is_truthy());

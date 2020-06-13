@@ -143,6 +143,12 @@ fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
+fn argv(_: &mut Interpreter, _args: Vec<Value>) -> Result<Value, String> {
+    Ok(Value::from(
+        std::env::args().map(|a| a.to_string()).collect::<Vec<_>>(),
+    ))
+}
+
 pub(crate) fn initialize_global_scope(agent: &mut Agent, global: &mut HashMap<usize, Value>) {
     macro_rules! add_global {
         ($name:ident, $arity:expr) => {{
