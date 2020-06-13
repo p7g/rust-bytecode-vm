@@ -259,6 +259,10 @@ impl Bytecode {
             .usize(export_name)
     }
 
+    pub fn export(&mut self, export_id: usize) -> &mut Bytecode {
+        self.op(OpCode::Export).usize(export_id)
+    }
+
     pub fn new_array(&mut self, len: usize) -> &mut Bytecode {
         self.op(OpCode::NewArray).usize(len)
     }

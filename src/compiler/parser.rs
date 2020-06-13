@@ -439,7 +439,7 @@ pub enum StatementKind {
     Continue,
     Return(Option<Expression>),
     Expression(Expression),
-    Export(Box<Statement>),
+    Export(usize, Box<Statement>),
     Import(String),
 }
 
@@ -813,18 +813,30 @@ impl<'a> Parser<'a> {
         let decl = self.parse_statement()?;
 
         let name = match &decl.value {
-            StatementKind::Function { name, .. } | StatementKind::Let { name, .. } => &name.value,
+            StatementKind::Function {
+                name:
+                    Expression {
+                        value: ExpressionKind::Identifier(name),
+                        ..
+                    },
+                ..
+            }
+            | StatementKind::Let {
+                name:
+                    Expression {
+                        value: ExpressionKind::Identifier(name),
+                        ..
+                    },
+                ..
+            } => name,
             _ => return Err("Can only export declarations".to_string()),
         };
 
-        self.module.as_mut().unwrap().add_export(match name {
-            ExpressionKind::Identifier(name) => *name,
-            _ => unreachable!(),
-        });
+        self.module.as_mut().unwrap().add_export(*name);
 
         Ok(Statement {
             position: export.position,
-            value: StatementKind::Export(Box::new(decl)),
+            value: StatementKind::Export(*name, Box::new(decl)),
         })
     }
 
@@ -1941,51 +1953,57 @@ return 1;
                         line: 1,
                         column: 14
                     },
-                    value: StatementKind::Export(Box::new(Statement {
-                        position: Position {
-                            line: 1,
-                            column: 21
-                        },
-                        value: StatementKind::Let {
-                            name: Expression {
-                                position: Position {
-                                    line: 1,
-                                    column: 25
-                                },
-                                value: ExpressionKind::Identifier(ident_a),
+                    value: StatementKind::Export(
+                        ident_a,
+                        Box::new(Statement {
+                            position: Position {
+                                line: 1,
+                                column: 21
                             },
-                            value: Some(Expression {
-                                position: Position {
-                                    line: 1,
-                                    column: 29,
+                            value: StatementKind::Let {
+                                name: Expression {
+                                    position: Position {
+                                        line: 1,
+                                        column: 25
+                                    },
+                                    value: ExpressionKind::Identifier(ident_a),
                                 },
-                                value: ExpressionKind::Integer(0),
-                            }),
-                        },
-                    })),
+                                value: Some(Expression {
+                                    position: Position {
+                                        line: 1,
+                                        column: 29,
+                                    },
+                                    value: ExpressionKind::Integer(0),
+                                }),
+                            },
+                        })
+                    ),
                 }),
                 Ok(Statement {
                     position: Position {
                         line: 1,
                         column: 32,
                     },
-                    value: StatementKind::Export(Box::new(Statement {
-                        position: Position {
-                            line: 1,
-                            column: 39,
-                        },
-                        value: StatementKind::Function {
-                            name: Expression {
-                                position: Position {
-                                    line: 1,
-                                    column: 48,
-                                },
-                                value: ExpressionKind::Identifier(ident_a),
+                    value: StatementKind::Export(
+                        ident_a,
+                        Box::new(Statement {
+                            position: Position {
+                                line: 1,
+                                column: 39,
                             },
-                            parameters: Vec::new(),
-                            body: Vec::new(),
-                        },
-                    })),
+                            value: StatementKind::Function {
+                                name: Expression {
+                                    position: Position {
+                                        line: 1,
+                                        column: 48,
+                                    },
+                                    value: ExpressionKind::Identifier(ident_a),
+                                },
+                                parameters: Vec::new(),
+                                body: Vec::new(),
+                            },
+                        })
+                    ),
                 }),
                 Err("Error in test: Can only export declarations".to_string()),
             ]

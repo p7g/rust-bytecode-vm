@@ -80,8 +80,12 @@ impl<'a> Compiler<'a> {
         }
 
         self.agent
-            .modules
-            .insert(parsed_module.spec.name, parsed_module.spec.clone());
+            .add_module(parsed_module.spec.name, parsed_module.spec.clone());
+        let modspec = self
+            .agent
+            .get_module_by_name(parsed_module.spec.name)
+            .cloned()
+            .unwrap();
         let gen = codegen::CodeGen::with_bytecode(
             self.agent,
             &mut self.debuginfo,
@@ -89,7 +93,7 @@ impl<'a> Compiler<'a> {
         );
 
         self.bytecode
-            .replace(gen.compile(parsed_module.spec, parsed_module.statements.iter())?);
+            .replace(gen.compile(&modspec, parsed_module.statements.iter())?);
 
         self.compiled_modules.insert(name);
 

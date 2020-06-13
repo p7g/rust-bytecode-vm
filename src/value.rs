@@ -359,6 +359,12 @@ impl From<FunctionValue> for Value {
     }
 }
 
+impl Default for Value {
+    fn default() -> Self {
+        Value::Null
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

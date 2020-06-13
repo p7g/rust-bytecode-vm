@@ -36,7 +36,7 @@ struct Frame {
 pub struct Interpreter<'a> {
     pub agent: &'a mut Agent,
     intrinsics: HashMap<usize, Value>,
-    modules: HashMap<usize, Module>,
+    modules: Vec<Module>,
     current_module: Option<Module>,
     call_stack: Vec<Frame>,
     stack: Vec<Value>,
@@ -56,9 +56,9 @@ impl<'a> Interpreter<'a> {
         intrinsics: HashMap<usize, Value>,
     ) -> Interpreter<'a> {
         Interpreter {
-            agent,
             intrinsics,
-            modules: HashMap::new(),
+            modules: Vec::with_capacity(agent.num_modules()),
+            agent,
             current_module: None,
             call_stack: Vec::new(),
             stack: Vec::new(),
@@ -93,6 +93,7 @@ impl<'a> Interpreter<'a> {
         self.stack.split_off(self.sp).into_iter().rev().collect()
     }
 
+    #[inline]
     fn next_instruction(&mut self, code: &[u8]) -> u8 {
         let inst = code[self.ip];
         self.ip += 1;
@@ -110,68 +111,71 @@ impl<'a> Interpreter<'a> {
         array
     }
 
+    #[inline]
     fn top(&self) -> &Value {
         &self.stack[self.sp - 1]
     }
 
+    #[inline]
     fn set_top(&mut self, value: Value) {
         self.stack[self.sp - 1] = value;
     }
 
     // in any scope except the global scope, the base pointer points after the arguments
-    fn arguments_index(&self) -> Result<usize, String> {
-        if self.call_stack.is_empty() {
-            Err(self.error("Trying to access arguments when not in function".to_string()))
-        } else {
-            Ok(self.bp - 1)
-        }
+    #[inline]
+    fn arguments_index(&self) -> usize {
+        debug_assert!(
+            !self.call_stack.is_empty(),
+            "Accessing arguments when not in function"
+        );
+        self.bp - 1
     }
 
-    fn argument(&self, at: usize) -> Result<&Value, String> {
-        Ok(&self.stack[self.arguments_index()? - at])
+    #[inline]
+    fn argument(&self, at: usize) -> &Value {
+        &self.stack[self.arguments_index() - at]
     }
 
-    fn set_argument(&mut self, idx: usize, value: Value) -> Result<(), String> {
-        let idx = self.arguments_index()? + idx;
+    #[inline]
+    fn set_argument(&mut self, idx: usize, value: Value) {
+        let idx = self.arguments_index() + idx;
         self.stack[idx] = value;
-        Ok(())
     }
 
     // in any scope except the global scope, the base pointer points to the executing function
+    #[inline]
     fn locals_index(&self) -> usize {
-        if self.call_stack.is_empty() {
-            0
-        } else {
-            self.bp + 1
-        }
+        debug_assert!(
+            !self.call_stack.is_empty(),
+            "Accessing locals in global scope"
+        );
+        self.bp + 1
     }
 
+    #[inline]
     fn local(&self, at: usize) -> &Value {
         &self.stack[self.locals_index() + at]
     }
 
+    #[inline]
     fn set_local(&mut self, idx: usize, value: Value) {
         let idx = self.locals_index() + idx;
         self.stack[idx] = value;
     }
 
     fn executing_function(&self) -> Result<&Value, String> {
-        if self.call_stack.is_empty() {
-            Err(self.error("Tried to get executing function in global scope".to_string()))
-        } else if let Some(func) = self.stack.get(self.bp) {
-            if let func @ Value::Function(_) = func {
-                Ok(func)
-            } else {
-                Err(self.error(
-                    "Tried to get executing function but bp didn't point to function".to_string(),
-                ))
-            }
+        debug_assert!(
+            !self.call_stack.is_empty(),
+            "Tried to get executing function in global scope"
+        );
+        debug_assert!(self.bp < self.stack.len(), "Base pointer is out of bounds");
+        let func = &self.stack[self.bp];
+        if let func @ Value::Function(_) = func {
+            Ok(func)
         } else {
-            Err(self.error(format!(
-                "Base pointer is not within stack: bp={} stack length={}",
-                self.bp,
-                self.stack.len()
-            )))
+            Err(self.error(
+                "Tried to get executing function but bp didn't point to function".to_string(),
+            ))
         }
     }
 
@@ -184,7 +188,7 @@ impl<'a> Interpreter<'a> {
                         FunctionValue::User { name, .. } => {
                             let module_name = self.agent.string_table[self
                                 .modules
-                                .get(&frame.module_id)
+                                .get(frame.module_id)
                                 .or_else(|| self.current_module.as_ref())
                                 .unwrap()
                                 .name()]
@@ -220,10 +224,11 @@ impl<'a> Interpreter<'a> {
 
     fn current_module(&self) -> Option<&Module> {
         if !self.call_stack.is_empty()
-            && self.call_stack.last().unwrap().module_id
-                != self.current_module.as_ref().unwrap().name()
+            && self.call_stack[self.call_stack.len() - 1].module_id
+                != self.current_module.as_ref().unwrap().id()
         {
-            self.modules.get(&self.call_stack.last().unwrap().module_id)
+            self.modules
+                .get(self.call_stack[self.call_stack.len() - 1].module_id)
         } else {
             self.current_module.as_ref()
         }
@@ -231,11 +236,11 @@ impl<'a> Interpreter<'a> {
 
     fn current_module_mut(&mut self) -> Option<&mut Module> {
         if !self.call_stack.is_empty()
-            && self.call_stack.last().unwrap().module_id
-                != self.current_module.as_ref().unwrap().name()
+            && self.call_stack[self.call_stack.len() - 1].module_id
+                != self.current_module.as_ref().unwrap().id()
         {
             self.modules
-                .get_mut(&self.call_stack.last().unwrap().module_id)
+                .get_mut(self.call_stack[self.call_stack.len() - 1].module_id)
         } else {
             self.current_module.as_mut()
         }
@@ -368,9 +373,10 @@ impl<'a> Interpreter<'a> {
                 OpCode::BindArgument => self.bind_argument(&code)?,
                 OpCode::LoadUpvalue => self.load_upvalue(&code)?,
                 OpCode::StoreUpvalue => self.store_upvalue(&code)?,
-                OpCode::LoadArgument => self.load_argument(&code)?,
-                OpCode::StoreArgument => self.store_argument(&code)?,
-                OpCode::LoadFromModule => self.load_from_module(&code)?,
+                OpCode::LoadArgument => self.load_argument(&code),
+                OpCode::StoreArgument => self.store_argument(&code),
+                OpCode::LoadFromModule => self.load_from_module(&code),
+                OpCode::Export => self.export(&code)?,
                 OpCode::NewArray => self.new_array(&code),
                 OpCode::NewArrayWithValues => self.new_array_with_values(&code)?,
                 OpCode::ArrayGet => self.array_get()?,
@@ -403,33 +409,40 @@ impl<'a> Interpreter<'a> {
         })
     }
 
+    #[inline]
     fn const_int(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(Value::from(i64::from_le_bytes(usize_bytes)));
     }
 
+    #[inline]
     fn const_double(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(Value::from(f64::from_bits(u64::from_le_bytes(usize_bytes))));
     }
 
+    #[inline]
     fn const_null(&mut self) {
         self.push(Value::Null);
     }
 
+    #[inline]
     fn const_true(&mut self) {
         self.push(Value::from(true));
     }
 
+    #[inline]
     fn const_false(&mut self) {
         self.push(Value::from(false));
     }
 
+    #[inline]
     fn const_string(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(Value::from(self.agent.string_table[idx].as_ref()));
     }
 
+    #[inline]
     fn const_char(&mut self, code: &[u8]) {
         let c: char = (usize::from_le_bytes(self.next_usize_bytes(&code)) as u32)
             .try_into()
@@ -437,10 +450,12 @@ impl<'a> Interpreter<'a> {
         self.push(Value::from(c));
     }
 
+    #[inline]
     fn jump(&mut self, code: &[u8]) {
         self.ip = usize::from_le_bytes(self.next_usize_bytes(&code));
     }
 
+    #[inline]
     fn jump_if_true(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
@@ -450,6 +465,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn jump_if_false(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
@@ -528,16 +544,16 @@ impl<'a> Interpreter<'a> {
             .ok_or("Trying to return outside of function")?;
 
         while let Some(uv) = self.agent.upvalues.pop() {
-            if uv.borrow().is_open() {
-                let i = uv.borrow().stack_index();
-                if i < self.bp - frame.num_args {
-                    self.agent.upvalues.push(uv);
-                    break;
-                }
-                uv.borrow_mut().close(self.stack[i].clone());
-            } else {
-                return Err(self.error("Had closed upvalue in agent.upvalues".to_string()));
+            debug_assert!(
+                uv.borrow().is_open(),
+                "Had closed upvalue in agent.upvalues"
+            );
+            let i = uv.borrow().stack_index();
+            if i < self.bp - frame.num_args {
+                self.agent.upvalues.push(uv);
+                break;
             }
+            uv.borrow_mut().close(self.stack[i].clone());
         }
 
         self.pop_n(frame.num_args + self.sp - self.bp);
@@ -549,24 +565,26 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn load_local(&mut self, code: &[u8]) {
         let usize_bytes = self.next_usize_bytes(&code);
         self.push(self.local(usize::from_le_bytes(usize_bytes)).clone());
     }
 
+    #[inline]
     fn store_local(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.set_local(idx, self.top().clone());
     }
 
+    #[inline]
     fn load_global(&mut self, code: &[u8]) -> Result<(), String> {
         let usize_bytes = self.next_usize_bytes(&code);
         let id = usize::from_le_bytes(usize_bytes);
 
         if let Some(module) = self.current_module_mut() {
-            if let Some(val) = module.global_scope.get(&id) {
-                let new_val = val.clone();
-                self.push(new_val);
+            if let Some(val) = module.global_scope.get(&id).cloned() {
+                self.push(val);
                 Ok(())
             } else {
                 Err(self.error(format!(
@@ -575,10 +593,11 @@ impl<'a> Interpreter<'a> {
                 )))
             }
         } else {
-            unreachable!();
+            unreachable!("Missing current_module");
         }
     }
 
+    #[inline]
     fn declare_global(&mut self, code: &[u8]) {
         let id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
@@ -613,7 +632,7 @@ impl<'a> Interpreter<'a> {
         let arity = usize::from_le_bytes(self.next_usize_bytes(&code));
         let address = usize::from_le_bytes(self.next_usize_bytes(&code));
         let module = if let Some(module) = self.current_module_mut() {
-            module.name()
+            module.id()
         } else {
             unreachable!();
         };
@@ -698,7 +717,7 @@ impl<'a> Interpreter<'a> {
         if let Value::Function(function_value) = &mut func {
             if let Some(FunctionValue::User { upvalues, .. }) = Rc::get_mut(function_value) {
                 if let Value::Function(_) = self.executing_function()? {
-                    let idx = self.arguments_index()? - idx;
+                    let idx = self.arguments_index() - idx;
                     let upvalue = if let Some(upvalue) = self
                         .agent
                         .upvalues
@@ -772,43 +791,51 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn load_argument(&mut self, code: &[u8]) -> Result<(), String> {
+    #[inline]
+    fn load_argument(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        self.push(self.argument(idx)?.clone());
-        Ok(())
+        self.push(self.argument(idx).clone());
     }
 
-    fn store_argument(&mut self, code: &[u8]) -> Result<(), String> {
+    #[inline]
+    fn store_argument(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        self.set_argument(idx, self.top().clone())?;
-        Ok(())
+        self.set_argument(idx, self.top().clone());
     }
 
-    fn load_from_module(&mut self, code: &[u8]) -> Result<(), String> {
-        let module_name = usize::from_le_bytes(self.next_usize_bytes(&code));
-        let export_name = usize::from_le_bytes(self.next_usize_bytes(&code));
+    fn load_from_module(&mut self, code: &[u8]) {
+        let module_id = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let export_id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
-        self.push(
-            self.modules
-                .get(&module_name)
-                .ok_or_else(|| format!("Unknown module {}", self.agent.string_table[module_name]))?
-                .resolve_export(self.agent, export_name)?,
-        );
-        Ok(())
+        self.push(self.modules[module_id].get_export(export_id));
     }
 
+    fn export(&mut self, code: &[u8]) -> Result<(), String> {
+        let export_id = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let exp = self.pop()?;
+        if let Some(module) = self.current_module_mut() {
+            module.set_export(export_id, exp);
+            Ok(())
+        } else {
+            Err("Exports only allowed within a module".to_string())
+        }
+    }
+
+    #[inline]
     fn new_array(&mut self, code: &[u8]) {
         let len = usize::from_le_bytes(self.next_usize_bytes(&code));
         self.push(Value::from(vec![Value::Null; len]));
     }
 
+    #[inline]
     fn new_array_with_values(&mut self, code: &[u8]) -> Result<(), String> {
         let num_values = usize::from_le_bytes(self.next_usize_bytes(&code));
         let mut values = Vec::with_capacity(num_values);
         for _ in 0..num_values {
             values.push(self.pop()?);
         }
-        self.push(Value::from(values.into_iter().rev().collect::<Vec<_>>()));
+        values.reverse();
+        self.push(Value::from(values));
         Ok(())
     }
 
@@ -855,6 +882,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    #[inline]
     fn equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -864,6 +892,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn not_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -873,6 +902,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn less_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -882,6 +912,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn less_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -891,6 +922,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn greater_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -900,6 +932,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
+    #[inline]
     fn greater_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
@@ -972,6 +1005,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    #[inline]
     fn not(&mut self) -> Result<(), String> {
         let result = Value::from(!self.top().is_truthy());
 
@@ -1025,29 +1059,34 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    #[inline]
     fn init_module(&mut self, code: &[u8]) {
-        let name = usize::from_le_bytes(self.next_usize_bytes(&code));
+        let id = usize::from_le_bytes(self.next_usize_bytes(&code));
 
         debug_assert!(self.current_module.is_none());
         self.current_module = Some(Module::new(
-            self.agent.modules[&name].clone(),
+            self.agent.get_module(id).clone(),
             self.intrinsics.clone(),
         ));
     }
 
+    #[inline]
     fn end_module(&mut self) {
         let module = self.current_module.take();
         debug_assert!(module.is_some());
 
-        let module = module.unwrap();
-        self.modules.insert(module.name(), module);
+        let mut module = module.unwrap();
+        module.finalize();
+        self.modules.insert(module.spec.id(), module);
     }
 
+    #[inline]
     fn dup(&mut self) {
         let value = self.top().clone();
         self.push(value);
     }
 
+    #[inline]
     fn allocate_locals(&mut self, code: &[u8]) {
         let count = usize::from_le_bytes(self.next_usize_bytes(&code));
 
@@ -1072,7 +1111,7 @@ mod tests {
             let name = agent.intern_string("test");
             let spec = ModuleSpec::new(name);
 
-            agent.modules.insert(name, spec);
+            agent.add_module(name, spec);
 
             agent
         }};
@@ -1429,9 +1468,19 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode
             .init_module(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .usize(0)
+            .address_of("fn")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("fn")
             .const_int(123)
             .const_double(432.0)
             .load_local(0)
+            .ret()
+            .label("end")
+            .call(0)
             .end_module();
 
         let code = bytecode.into();
@@ -1448,11 +1497,21 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode
             .init_module(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .usize(0)
+            .address_of("fn")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("fn")
             .const_int(123)
             .const_int(234)
             .store_local(0)
             .pop()
             .load_local(0)
+            .ret()
+            .label("end")
+            .call(0)
             .end_module();
 
         let code = bytecode.into();
@@ -1557,6 +1616,13 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode
             .init_module(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .usize(0)
+            .address_of("outer")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("outer")
             .op(OpCode::Jump)
             .address_of("main")
             .label("func")
@@ -1569,6 +1635,9 @@ mod tests {
             .usize(0)
             .address_of("func")
             .bind_local(0)
+            .call(0)
+            .ret()
+            .label("end")
             .call(0)
             .end_module();
 
@@ -1586,6 +1655,13 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode
             .init_module(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .usize(0)
+            .address_of("outer")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("outer")
             .op(OpCode::Jump)
             .address_of("main")
             .label("func1")
@@ -1606,6 +1682,9 @@ mod tests {
             .address_of("func1")
             .bind_local(0)
             .call(0)
+            .call(0)
+            .ret()
+            .label("end")
             .call(0)
             .end_module();
 
@@ -1659,6 +1738,13 @@ mod tests {
         let mut bytecode = Bytecode::new();
         bytecode
             .init_module(0)
+            .op(OpCode::NewFunction)
+            .usize(0)
+            .usize(0)
+            .address_of("fn")
+            .op(OpCode::Jump)
+            .address_of("end")
+            .label("fn")
             .op(OpCode::Jump)
             .address_of("main")
             .label("test")
@@ -1671,6 +1757,9 @@ mod tests {
             .usize(0)
             .address_of("test")
             .bind_local(0)
+            .call(0)
+            .ret()
+            .label("end")
             .call(0)
             .end_module();
 
@@ -2264,17 +2353,18 @@ mod tests {
 
     #[test]
     fn test_load_from_module() {
-        let mut agent = get_agent!();
+        let mut agent = Agent::new();
         let ident_testmodule = agent.intern_string("TestModule");
         let ident_test = agent.intern_string("test");
 
         let mut modspec = ModuleSpec::new(ident_testmodule);
         modspec.add_export(ident_test);
-        agent.modules.insert(ident_testmodule, modspec);
+        agent.add_module(ident_testmodule, modspec);
+        agent.add_module(ident_test, ModuleSpec::new(ident_test));
 
         let mut bytecode = Bytecode::new();
         bytecode
-            .init_module(ident_testmodule)
+            .init_module(0)
             .op(OpCode::Jump)
             .address_of("after_test")
             .label("test")
@@ -2287,10 +2377,10 @@ mod tests {
             .address_of("test")
             .declare_global(ident_test)
             .store_global(ident_test)
-            .pop()
+            .export(0)
             .end_module()
-            .init_module(0)
-            .load_from_module(ident_testmodule, ident_test)
+            .init_module(1)
+            .load_from_module(0, 0)
             .call(0)
             .end_module();
 

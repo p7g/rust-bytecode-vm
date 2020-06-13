@@ -35,6 +35,7 @@ pub enum OpCode {
     LoadArgument,
     StoreArgument,
     LoadFromModule,
+    Export,
     NewArray,
     NewArrayWithValues,
     ArrayGet,

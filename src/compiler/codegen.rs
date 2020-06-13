@@ -103,15 +103,21 @@ struct CompilerState<'a> {
     loop_state: Option<LoopState>,
     function_state: Option<FunctionState>,
     scope: Option<Scope<'a>>,
+    module: &'a ModuleSpec,
 }
 
 impl<'a> CompilerState<'a> {
-    pub fn new(is_global: bool, scope: Option<Scope<'a>>) -> CompilerState<'a> {
+    pub fn new(
+        is_global: bool,
+        scope: Option<Scope<'a>>,
+        module: &'a ModuleSpec,
+    ) -> CompilerState<'a> {
         CompilerState {
             is_global,
             loop_state: None,
             function_state: None,
             scope,
+            module,
         }
     }
 
@@ -174,15 +180,15 @@ impl<'a> CodeGen<'a> {
 
     pub(crate) fn compile<'b, T>(
         mut self,
-        module: ModuleSpec,
+        module: &ModuleSpec,
         statements: T,
     ) -> CompileResult<Bytecode>
     where
         T: Iterator<Item = &'b Statement>,
     {
-        let mut state = CompilerState::new(true, None);
+        let mut state = CompilerState::new(true, None, module);
 
-        self.bytecode.init_module(module.name);
+        self.bytecode.init_module(module.id());
 
         for statement in statements {
             self.compile_statement(&mut state, statement)?;
@@ -199,8 +205,10 @@ impl<'a> CodeGen<'a> {
         statement: &Statement,
     ) -> CompileResult<()> {
         match statement.value {
-            StatementKind::Let { .. } => self.compile_let_statement(state, statement),
-            StatementKind::Function { .. } => self.compile_function_statement(state, statement),
+            StatementKind::Let { .. } => self.compile_let_statement(state, statement, false),
+            StatementKind::Function { .. } => {
+                self.compile_function_statement(state, statement, false)
+            }
             StatementKind::If { .. } => self.compile_if_statement(state, statement),
             StatementKind::For { .. } => self.compile_for_statement(state, statement),
             StatementKind::While { .. } => self.compile_while_statement(state, statement),
@@ -208,7 +216,7 @@ impl<'a> CodeGen<'a> {
             StatementKind::Continue => self.compile_continue_statement(state, statement),
             StatementKind::Expression(_) => self.compile_expression_statement(state, statement),
             StatementKind::Return(_) => self.compile_return_statement(state, statement),
-            StatementKind::Export(_) => self.compile_export_statement(state, statement),
+            StatementKind::Export(..) => self.compile_export_statement(state, statement),
             StatementKind::Import(_) => unreachable!(), // filtered out by parser
         }
     }
@@ -217,6 +225,7 @@ impl<'a> CodeGen<'a> {
         &mut self,
         state: &mut CompilerState,
         statement: &Statement,
+        leave: bool, // only affects global let declarations
     ) -> CompileResult<()> {
         if let StatementKind::Let {
             name:
@@ -233,10 +242,10 @@ impl<'a> CodeGen<'a> {
                 self.bytecode.const_null();
             }
             if state.is_global {
-                self.bytecode
-                    .declare_global(*name)
-                    .store_global(*name)
-                    .pop();
+                self.bytecode.declare_global(*name).store_global(*name);
+                if !leave {
+                    self.bytecode.pop();
+                }
             } else if let Some(scope) = &mut state.scope {
                 let index = scope.push_binding(BindingType::Local, *name);
                 self.bytecode.store_local(index);
@@ -255,6 +264,7 @@ impl<'a> CodeGen<'a> {
         name: Option<usize>,
         parameters: &[Expression],
         body: &[Statement],
+        leave: bool, // only affects declarations in the global scope
     ) -> CompileResult<()> {
         let start_label = self.bytecode.new_label();
         let end_label = self.bytecode.new_label();
@@ -267,7 +277,10 @@ impl<'a> CodeGen<'a> {
 
         let local_index = if let Some(name) = name {
             if state.is_global {
-                self.bytecode.declare_global(name).store_global(name).pop();
+                self.bytecode.declare_global(name).store_global(name);
+                if !leave {
+                    self.bytecode.pop();
+                }
                 None
             } else {
                 Some(
@@ -296,7 +309,7 @@ impl<'a> CodeGen<'a> {
             }
         }
 
-        let mut inner_state = CompilerState::new(false, Some(inner_scope));
+        let mut inner_state = CompilerState::new(false, Some(inner_scope), state.module);
         inner_state.function_state = Some(FunctionState::new(start_label, end_label));
 
         self.bytecode.op(OpCode::Jump).address_of_auto(end_label);
@@ -361,6 +374,7 @@ impl<'a> CodeGen<'a> {
         &mut self,
         state: &mut CompilerState,
         statement: &Statement,
+        leave: bool,
     ) -> CompileResult<()> {
         if let StatementKind::Function {
             name:
@@ -372,7 +386,7 @@ impl<'a> CodeGen<'a> {
             body,
         } = &statement.value
         {
-            self.compile_function(state, Some(*name), parameters, body)
+            self.compile_function(state, Some(*name), parameters, body, leave)
         } else {
             unreachable!();
         }
@@ -600,8 +614,15 @@ impl<'a> CodeGen<'a> {
         state: &mut CompilerState,
         statement: &Statement,
     ) -> CompileResult<()> {
-        if let StatementKind::Export(stmt) = &statement.value {
-            self.compile_statement(state, stmt)?;
+        if let StatementKind::Export(name, stmt) = &statement.value {
+            match stmt.value {
+                StatementKind::Function { .. } => {
+                    self.compile_function_statement(state, stmt, true)?
+                }
+                StatementKind::Let { .. } => self.compile_let_statement(state, stmt, true)?,
+                _ => unreachable!("Unsupported statement for export"),
+            }
+            self.bytecode.export(state.module.export_id(*name));
 
             Ok(())
         } else {
@@ -806,7 +827,7 @@ impl<'a> CodeGen<'a> {
         expression: &Expression,
     ) -> CompileResult<()> {
         if let ExpressionKind::Function { parameters, body } = &expression.value {
-            self.compile_function(state, None, parameters, body)
+            self.compile_function(state, None, parameters, body, true)
         } else {
             unreachable!();
         }
@@ -906,13 +927,23 @@ impl<'a> CodeGen<'a> {
                 TokenType::Dot => {
                     if let ExpressionKind::Identifier(module_name) = left.value {
                         if let ExpressionKind::Identifier(export_name) = right.value {
-                            if self.agent.modules[&module_name].has_export(export_name) {
-                                self.bytecode.load_from_module(module_name, export_name);
+                            if let Some(module) = self.agent.get_module_by_name(module_name) {
+                                if module.has_export(export_name) {
+                                    self.bytecode.load_from_module(
+                                        module.id(),
+                                        module.export_id(export_name),
+                                    );
+                                } else {
+                                    return Err(format!(
+                                        "Module {} has no export {}",
+                                        self.agent.string_table[module_name],
+                                        self.agent.string_table[export_name]
+                                    ));
+                                }
                             } else {
                                 return Err(format!(
-                                    "Module {} has no export {}",
-                                    self.agent.string_table[module_name],
-                                    self.agent.string_table[export_name]
+                                    "No such module {}",
+                                    self.agent.string_table[module_name]
                                 ));
                             }
                         } else {
@@ -1011,7 +1042,9 @@ mod tests {
 
             let mut debuginfo = DebugInfo::new();
             let compiler = CodeGen::new(&mut agent, &mut debuginfo);
-            let bytecode: Vec<u8> = compiler.compile(ModuleSpec::new(name), ast.iter())?.into();
+            let mut spec = ModuleSpec::new(name);
+            spec.finalize(0);
+            let bytecode: Vec<u8> = compiler.compile(&spec, ast.iter())?.into();
 
             let expected: Vec<u8> = $expected.into();
 
@@ -1179,10 +1212,9 @@ mod tests {
     fn test_for_statement() -> Result<(), String> {
         let mut agent = Agent::new();
         let ident_a = agent.intern_string("a");
-        let ident_test = agent.intern_string("test");
 
         let mut bc = Bytecode::new();
-        bc.init_module(ident_test)
+        bc.init_module(0)
             .const_null()
             .declare_global(ident_a)
             .store_global(ident_a)
@@ -1549,9 +1581,8 @@ mod tests {
     fn test_assignment_expression() -> Result<(), String> {
         let mut agent = Agent::new();
         let a = agent.intern_string("a");
-        let ident_test = agent.intern_string("test");
         let mut bc = Bytecode::new();
-        bc.init_module(ident_test)
+        bc.init_module(0)
             .const_null()
             .declare_global(a)
             .store_global(a)

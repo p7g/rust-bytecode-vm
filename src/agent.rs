@@ -7,7 +7,9 @@ use std::rc::Rc;
 pub struct Agent {
     pub string_table: Vec<String>,
     pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
-    pub modules: HashMap<usize, ModuleSpec>,
+    modules: Vec<ModuleSpec>,
+    module_indices: HashMap<usize, usize>,
+    next_module_id: usize,
 }
 
 impl Agent {
@@ -15,7 +17,9 @@ impl Agent {
         Agent {
             string_table: Vec::new(),
             upvalues: Vec::new(),
-            modules: HashMap::new(),
+            modules: Vec::new(),
+            module_indices: HashMap::new(),
+            next_module_id: 0,
         }
     }
 
@@ -30,6 +34,29 @@ impl Agent {
             let idx = self.string_table.len();
             self.string_table.push(String::from(s));
             idx
+        }
+    }
+
+    pub fn num_modules(&self) -> usize {
+        self.modules.len()
+    }
+
+    pub fn add_module(&mut self, name: usize, mut spec: ModuleSpec) {
+        spec.finalize(self.next_module_id);
+        self.module_indices.insert(name, self.next_module_id);
+        self.modules.push(spec);
+        self.next_module_id += 1;
+    }
+
+    pub fn get_module(&mut self, idx: usize) -> &ModuleSpec {
+        &self.modules[idx]
+    }
+
+    pub fn get_module_by_name(&mut self, name: usize) -> Option<&ModuleSpec> {
+        if let Some(idx) = self.module_indices.get(&name) {
+            Some(&self.modules[*idx])
+        } else {
+            None
         }
     }
 }

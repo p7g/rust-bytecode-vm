@@ -65,7 +65,9 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             | OpCode::StoreArgument
             | OpCode::NewArray
             | OpCode::NewArrayWithValues
-            | OpCode::AllocateLocals => {
+            | OpCode::AllocateLocals
+            | OpCode::InitModule
+            | OpCode::Export => {
                 eprintln!(
                     "{:?}({:?})",
                     instruction,
@@ -76,18 +78,17 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             OpCode::LoadGlobal
             | OpCode::DeclareGlobal
             | OpCode::StoreGlobal
-            | OpCode::ConstString
-            | OpCode::InitModule => {
+            | OpCode::ConstString => {
                 let idx = usize::from_le_bytes(next!(usize));
                 eprintln!("{:?}({:?} ({}))", instruction, agent.string_table[idx], idx,);
             }
 
             OpCode::LoadFromModule => {
                 eprintln!(
-                    "{:?}({}.{})",
+                    "{:?}({}, {})",
                     instruction,
-                    agent.string_table[usize::from_le_bytes(next!(usize))],
-                    agent.string_table[usize::from_le_bytes(next!(usize))],
+                    usize::from_le_bytes(next!(usize)),
+                    usize::from_le_bytes(next!(usize)),
                 );
             }
 
