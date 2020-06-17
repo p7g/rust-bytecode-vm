@@ -333,25 +333,21 @@ impl<'a> CodeGen<'a> {
 
         self.bytecode.mark_label(end_label);
 
-        for (i, free_variable) in inner_state
-            .function_state
-            .unwrap()
-            .free_variables
-            .iter()
-            .enumerate()
-        {
+        let mut i = 0;
+        for free_variable in inner_state.function_state.unwrap().free_variables.iter() {
             if let Some(binding) = state.scope.as_ref().unwrap().get_binding(*free_variable) {
                 match binding.typ {
                     BindingType::Local => self.bytecode.bind_local(binding.index),
                     BindingType::Argument => self.bytecode.bind_argument(binding.index),
                     BindingType::Upvalue => self.bytecode.bind_upvalue(binding.index),
                 };
-            } else if let Some(scope) = &inner_state.scope {
+            } else if let Some(scope) = &state.scope {
                 if scope.parent_has_binding(*free_variable) {
                     if let Some(function_state) = &mut state.function_state {
                         function_state.free_variables.push(*free_variable);
                         self.bytecode
                             .bind_upvalue(scope.binding_count[BindingType::Upvalue as usize] + i);
+                        i += 1;
                     } else {
                         unreachable!();
                     }
