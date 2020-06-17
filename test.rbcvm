@@ -8,105 +8,111 @@ import "lib/iter.rbcvm";
 import "lib/result.rbcvm";
 import "lib/string.rbcvm";
 
-function tape_new() {
-    return [0, ArrayList.from_array(1, [0])];
-}
-
-function tape_get(tape) {
-    return ArrayList.get(tape[1], tape[0]);
-}
-
-function tape_inc(tape, amount) {
-    let reel = tape[1];
-    let idx = tape[0];
-    ArrayList.set(reel, idx, amount + ArrayList.get(reel, idx));
-}
-
-function tape_move(tape, amount) {
-    tape[0] = tape[0] + amount;
-    while ArrayList.length(tape[1]) <= tape[0] {
-        ArrayList.push(tape[1], 0);
+(function() {
+    function tape_new() {
+        return [0, ArrayList.from_array(1, [0])];
     }
-}
 
-let OP_INC = 0;
-let OP_MOVE = 1;
-let OP_LOOP = 2;
-let OP_PRINT = 3;
+    function tape_get(tape) {
+        return ArrayList.get(tape[1], tape[0]);
+    }
 
-function op(type, value) {
-    return [type, value];
-}
+    function tape_inc(tape, amount) {
+        let reel = tape[1];
+        let idx = tape[0];
+        ArrayList.set(reel, idx, amount + ArrayList.get(reel, idx));
+    }
 
-function _bf_parse(next_char) {
-    let code = ArrayList.new();
-
-    for let c; (c = next_char()) != null; {
-        if c == '+' {
-            ArrayList.push(code, op(OP_INC, 1));
-        } else if c == '-' {
-            ArrayList.push(code, op(OP_INC, -1));
-        } else if c == '>' {
-            ArrayList.push(code, op(OP_MOVE, 1));
-        } else if c == '<' {
-            ArrayList.push(code, op(OP_MOVE, -1));
-        } else if c == '.' {
-            ArrayList.push(code, op(OP_PRINT, null));
-        } else if c == '[' {
-            ArrayList.push(code, op(OP_LOOP, _bf_parse(next_char)));
-        } else if c == ']' {
-            break;
+    function tape_move(tape, amount) {
+        tape[0] = tape[0] + amount;
+        while ArrayList.length(tape[1]) <= tape[0] {
+            ArrayList.push(tape[1], 0);
         }
     }
 
-    return ArrayList.to_array(code);
-}
+    let OP_INC = 0;
+    let OP_MOVE = 1;
+    let OP_LOOP = 2;
+    let OP_PRINT = 3;
 
-function bf_parse(program) {
-    return _bf_parse(Iter.from_array(String.chars(program)));
-}
+    function op(type, value) {
+        return [type, value];
+    }
 
-function _bf_run(ops, tape) {
-    Iter.foreach(ops, function(op) {
-        let type = op[0];
-        let value = op[1];
+    function _bf_parse(next_char) {
+        let code = ArrayList.new();
 
-        if type == OP_INC {
-            tape_inc(tape, value);
-        } else if type == OP_MOVE {
-            tape_move(tape, value);
-        } else if type == OP_PRINT {
-            print(chr(tape_get(tape)));
-        } else if type == OP_LOOP {
-            while tape_get(tape) != 0 {
-                _bf_run(Iter.from_array(value), tape);
+        for let c; (c = next_char()) != null; {
+            if c == '+' {
+                ArrayList.push(code, op(OP_INC, 1));
+            } else if c == '-' {
+                ArrayList.push(code, op(OP_INC, -1));
+            } else if c == '>' {
+                ArrayList.push(code, op(OP_MOVE, 1));
+            } else if c == '<' {
+                ArrayList.push(code, op(OP_MOVE, -1));
+            } else if c == '.' {
+                ArrayList.push(code, op(OP_PRINT, null));
+            } else if c == '[' {
+                ArrayList.push(code, op(OP_LOOP, _bf_parse(next_char)));
+            } else if c == ']' {
+                break;
             }
         }
-    });
-}
 
-function bf_run(ops) {
-    _bf_run(Iter.from_array(ops), tape_new());
-}
+        return ArrayList.to_array(code);
+    }
 
-let prog = "
- Benchmark brainf*ck program
+    function bf_parse(program) {
+        return _bf_parse(Iter.from_array(String.chars(program)));
+    }
+
+    function _bf_run(ops, tape) {
+        # add to upvalues of _bf_run :(
+        # _bf_run;
+
+        function iterate_ops(op) {
+            let type = op[0];
+            let value = op[1];
+
+            if type == OP_INC {
+                tape_inc(tape, value);
+            } else if type == OP_MOVE {
+                tape_move(tape, value);
+            } else if type == OP_PRINT {
+                print(chr(tape_get(tape)));
+            } else if type == OP_LOOP {
+                while tape_get(tape) != 0 {
+                    _bf_run(Iter.from_array(value), tape);
+                }
+            }
+        }
+
+        Iter.foreach(ops, iterate_ops);
+    }
+
+    function bf_run(ops) {
+        _bf_run(Iter.from_array(ops), tape_new());
+    }
+
+    let prog = "
+Benchmark brainf*ck program
 >++[<+++++++++++++>-]<[[>+>+<<-]>[<+>-]++++++++
 [>++++++++<-]>.[-]<<>++++++++++[>++++++++++[>++
 ++++++++[>++++++++++[>++++++++++[>++++++++++[>+
 +++++++++[-]<-]<-]<-]<-]<-]<-]<-]++++++++++.
 ";
 
-let hello = "
+    let hello = "
 [ This program prints \"Hello World!\" and a newline to the screen, its
-  length is 106 active command characters. [It is not the shortest.]
+length is 106 active command characters. [It is not the shortest.]
 
-  This loop is an \"initial comment loop\", a simple way of adding a comment
-  to a BF program such that you don't have to worry about any command
-  characters. Any '.', ',', '+', '-', '<' and '>' characters are simply
-  ignored, the '[' and ']' characters just have to be balanced. This
-  loop and the commands it contains are ignored because the current cell
-  defaults to a value of 0; the 0 value causes this loop to be skipped.
+This loop is an \"initial comment loop\", a simple way of adding a comment
+to a BF program such that you don't have to worry about any command
+characters. Any '.', ',', '+', '-', '<' and '>' characters are simply
+ignored, the '[' and ']' characters just have to be balanced. This
+loop and the commands it contains are ignored because the current cell
+defaults to a value of 0; the 0 value causes this loop to be skipped.
 ]
 ++++++++               Set Cell #0 to 8
 [
@@ -143,45 +149,46 @@ Pointer :   ^
 >++.                    And finally a newline from Cell #6
 ";
 
-let warmup = "
+    let warmup = "
 >++[<+++++++++++++>-]<[[>+>+<<-]>[<+>-]++++++++[>++++++++<-]>[-]<<>++++++++++[>
 ++++++++++[>++++++++++[>++++++++++[>++++++++++[>++++++++++[>++++++++++[-]<-]<-]
 <-]<-]<-]<-]<-]++++++++++
 ";
 
-# bf_run(bf_parse(hello));
+    bf_run(bf_parse(prog));
+}());
 
-import "lib/json.rbcvm";
-
-let file_contents = read_file("1.json");
-
-function main() {
-  let json = JSON.parse(file_contents);
-  if Result.is_error(json) {
-    return json;
-  } else {
-    json = Result.data(json);
-  }
-
-  let coordinates = HashMap.get(json, "coordinates");
-  let len = Array.length(coordinates);
-  let x = 0;
-  let y = 0;
-  let z = 0;
-
-  let coord;
-  for let i = 0; i < len; i = i + 1 {
-    coord = coordinates[i];
-    x = x + HashMap.get(coord, "x");
-    y = y + HashMap.get(coord, "y");
-    z = z + HashMap.get(coord, "z");
-  }
-
-  println(x / len);
-  println(y / len);
-  println(z / len);
-
-  return Result.ok(null);
-}
-
-Result.map_error(main(), println);
+# import "lib/json.rbcvm";
+#
+# let file_contents = read_file("1.json");
+#
+# function main() {
+#   let json = JSON.parse(file_contents);
+#   if Result.is_error(json) {
+#     return json;
+#   } else {
+#     json = Result.data(json);
+#   }
+#
+#   let coordinates = HashMap.get(json, "coordinates");
+#   let len = Array.length(coordinates);
+#   let x = 0;
+#   let y = 0;
+#   let z = 0;
+#
+#   let coord;
+#   for let i = 0; i < len; i = i + 1 {
+#     coord = coordinates[i];
+#     x = x + HashMap.get(coord, "x");
+#     y = y + HashMap.get(coord, "y");
+#     z = z + HashMap.get(coord, "z");
+#   }
+#
+#   println(x / len);
+#   println(y / len);
+#   println(z / len);
+#
+#   return Result.ok(null);
+# }
+#
+# Result.map_error(main(), println);

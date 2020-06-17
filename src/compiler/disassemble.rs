@@ -93,10 +93,16 @@ pub fn disassemble(agent: &Agent, code: &[u8]) -> Result<(), String> {
             }
 
             OpCode::NewFunction => {
+                let name = usize::from_le_bytes(next!(usize));
+                let name = if name != std::usize::MAX {
+                    &agent.string_table[name]
+                } else {
+                    "<anonymous>"
+                };
                 eprintln!(
-                    "{:?}({:?}, {:?}, {:?})",
+                    "{:?}({}, {:?}, {:?})",
                     instruction,
-                    usize::from_le_bytes(next!(usize)),
+                    name,
                     usize::from_le_bytes(next!(usize)),
                     usize::from_le_bytes(next!(usize)),
                 );
