@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ops::{Add, Deref, Div, Mul, Rem, Sub};
@@ -532,7 +533,10 @@ impl<'a> Interpreter<'a> {
             }
             Ok(())
         } else {
-            Err(self.error(format!("Value {} is not callable", function)))
+            Err(self.error(format!(
+                "Value {} is not callable",
+                function.to_string(self.agent)
+            )))
         }
     }
 
@@ -886,7 +890,7 @@ impl<'a> Interpreter<'a> {
     fn equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left == right);
+        let result = Value::from(left.eq(&right, self.agent));
 
         self.set_top(result);
         Ok(())
@@ -896,7 +900,7 @@ impl<'a> Interpreter<'a> {
     fn not_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left != right);
+        let result = Value::from(!left.eq(&right, self.agent));
 
         self.set_top(result);
         Ok(())
@@ -906,7 +910,7 @@ impl<'a> Interpreter<'a> {
     fn less_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left < right);
+        let result = Value::from(left.cmp(&right, self.agent) == Some(Ordering::Less));
 
         self.set_top(result);
         Ok(())
@@ -916,7 +920,8 @@ impl<'a> Interpreter<'a> {
     fn less_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left <= right);
+        let cmp = left.cmp(&right, self.agent);
+        let result = Value::from(cmp == Some(Ordering::Less) || cmp == Some(Ordering::Equal));
 
         self.set_top(result);
         Ok(())
@@ -926,7 +931,7 @@ impl<'a> Interpreter<'a> {
     fn greater_than(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left > right);
+        let result = Value::from(left.cmp(&right, self.agent) == Some(Ordering::Greater));
 
         self.set_top(result);
         Ok(())
@@ -936,7 +941,8 @@ impl<'a> Interpreter<'a> {
     fn greater_than_equal(&mut self) -> Result<(), String> {
         let right = self.pop()?;
         let left = self.top();
-        let result = Value::from(*left >= right);
+        let cmp = left.cmp(&right, self.agent);
+        let result = Value::from(cmp == Some(Ordering::Greater) || cmp == Some(Ordering::Equal));
 
         self.set_top(result);
         Ok(())

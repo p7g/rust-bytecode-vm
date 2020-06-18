@@ -1,28 +1,27 @@
 use crate::agent::Agent;
-use crate::interpreter::Interpreter;
 use crate::value::{FunctionValue, Value};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::rc::Rc;
 
-fn tostring(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
-    Ok(Value::from(format!("{}", args[0])))
+fn tostring(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    Ok(Value::from(args[0].to_string(agent)))
 }
 
-fn type_of(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn type_of(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     Ok(Value::from(args[0].type_of()))
 }
 
-fn print(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
-    print!("{}", args[0]);
+fn print(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    print!("{}", args[0].to_string(agent));
     io::stdout().flush().map_err(|_| "Failed to flush stdout")?;
     Ok(Value::Null)
 }
 
-fn println(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn println(agent: &Agent, args: &[Value]) -> Result<Value, String> {
     let mut s = String::new();
 
-    for (i, v) in args.iter().map(|v| format!("{}", v)).enumerate() {
+    for (i, v) in args.iter().map(|v| v.to_string(agent)).enumerate() {
         s.push_str(&v);
         if i < args.len() - 1 {
             s.push(' ');
@@ -34,7 +33,7 @@ fn println(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn array_new(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Integer(n)) = args.get(0) {
         Ok(Value::from(vec![Value::Null; *n as usize]))
     } else {
@@ -42,7 +41,7 @@ fn array_new(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn string_chars(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
         Ok(Value::from(s.chars().map(Value::from).collect::<Vec<_>>()))
     } else {
@@ -50,7 +49,7 @@ fn string_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> 
     }
 }
 
-fn string_from_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn string_from_chars(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Array(cs)) = args.get(0) {
         let s: String = cs
             .borrow()
@@ -67,7 +66,7 @@ fn string_from_chars(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, Str
     }
 }
 
-fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn string_bytes(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.get(0) {
         Ok(Value::from(
             s.bytes()
@@ -79,7 +78,7 @@ fn string_bytes(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> 
     }
 }
 
-fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn string_concat(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     let mut buf = String::new();
 
     for arg in args {
@@ -93,7 +92,7 @@ fn string_concat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String>
     Ok(Value::String(Rc::new(buf)))
 }
 
-fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn ord(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Char(c)) = args.get(0) {
         Ok(Value::from(*c as i64))
     } else {
@@ -101,7 +100,7 @@ fn ord(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn chr(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn chr(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Integer(n)) = args.get(0) {
         Ok(Value::from(*n as u8 as char))
     } else {
@@ -109,7 +108,7 @@ fn chr(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn array_length(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Array(vs)) = args.get(0) {
         Ok(Value::from(vs.borrow().len() as i64))
     } else {
@@ -117,7 +116,7 @@ fn array_length(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> 
     }
 }
 
-fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn truncate32(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Integer(i)) = args.get(0) {
         Ok(Value::from(i64::from(*i as u32)))
     } else {
@@ -125,7 +124,7 @@ fn truncate32(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn tofloat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn tofloat(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::Integer(i)) = args.first() {
         Ok(Value::Double(*i as f64))
     } else {
@@ -133,7 +132,7 @@ fn tofloat(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
+fn read_file(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     if let Some(Value::String(s)) = args.first() {
         Ok(Value::from(
             std::fs::read_to_string(&**s).map_err(|_| "Failed to read file".to_string())?,
@@ -143,7 +142,7 @@ fn read_file(_: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
     }
 }
 
-fn argv(_: &mut Interpreter, _args: Vec<Value>) -> Result<Value, String> {
+fn argv(_agent: &Agent, _args: &[Value]) -> Result<Value, String> {
     Ok(Value::from(std::env::args().collect::<Vec<_>>()))
 }
 

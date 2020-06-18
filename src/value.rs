@@ -1,19 +1,29 @@
-use crate::interpreter::Interpreter;
+use crate::agent::Agent;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-type BuiltinFunction = fn(&mut Interpreter, Vec<Value>) -> Result<Value, String>;
+type BuiltinFunction = fn(&Agent, &[Value]) -> Result<Value, String>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 enum UpvalueValue {
     Open(usize), // index of stack
     Closed(Value),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Upvalue {
     value: UpvalueValue,
+}
+
+impl PartialEq for Upvalue {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.value, &other.value) {
+            (UpvalueValue::Open(a), UpvalueValue::Open(b)) => a == b,
+            (UpvalueValue::Closed(v1), UpvalueValue::Closed(v2)) => v1 == v2,
+            _ => false,
+        }
+    }
 }
 
 impl Upvalue {
@@ -157,7 +167,9 @@ impl PartialEq for FunctionValue {
     }
 }
 
-#[derive(Debug, Clone)]
+// PartialEq does not necessarily represent the language equality semantics.
+// Value::eq should be used instead
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i64),
     Double(f64),
@@ -195,35 +207,33 @@ impl Value {
             Value::Null => false,
         }
     }
-}
 
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    pub fn to_string(&self, agent: &Agent) -> String {
         match self {
-            Value::String(s) => write!(f, "{}", s),
-            Value::Char(c) => write!(f, "{}", c),
-            Value::Integer(n) => write!(f, "{}", n),
-            Value::Double(n) => write!(f, "{}", n),
-            Value::Boolean(b) => write!(f, "{}", b),
-            Value::Null => write!(f, "null"),
-            Value::Array(vs) => {
-                let len = vs.borrow().len();
-                write!(f, "[")?;
-                for (i, val) in vs.borrow().iter().enumerate() {
-                    write!(f, "{}", val)?;
-                    if i < len - 1 {
-                        write!(f, ", ")?;
+            Value::String(s) => format!("{}", s),
+            Value::Char(c) => format!("{}", c),
+            Value::Integer(n) => format!("{}", n),
+            Value::Double(n) => format!("{}", n),
+            Value::Boolean(b) => format!("{}", b),
+            Value::Null => format!("null"),
+            Value::Array(vs) => vs.borrow().iter().map(|v| v.to_string(agent)).collect(),
+            Value::Function(func) => {
+                let name = match **func {
+                    FunctionValue::User { name, .. } | FunctionValue::Builtin { name, .. } => name,
+                };
+                format!(
+                    "function {}",
+                    if let Some(name) = name {
+                        agent.string_table[name].as_ref()
+                    } else {
+                        "<anonymous>"
                     }
-                }
-                write!(f, "]")
+                )
             }
-            Value::Function(func) => write!(f, "{:?}", func),
         }
     }
-}
 
-impl PartialEq for Value {
-    fn eq(&self, other: &Value) -> bool {
+    pub fn eq(&self, other: &Value, agent: &Agent) -> bool {
         match self {
             Value::Integer(a) => {
                 if let Value::Integer(b) = other {
@@ -278,7 +288,7 @@ impl PartialEq for Value {
                     if a.len() != b.len() {
                         false
                     } else {
-                        a.iter().zip(b.iter()).all(|(a, b)| a == b)
+                        a.iter().zip(b.iter()).all(|(a, b)| a.eq(b, agent))
                     }
                 } else {
                     false
@@ -293,11 +303,9 @@ impl PartialEq for Value {
             }
         }
     }
-}
 
-impl PartialOrd for Value {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self == other {
+    pub fn cmp(&self, other: &Self, agent: &Agent) -> Option<Ordering> {
+        if self.eq(other, agent) {
             return Some(Ordering::Equal);
         }
 
@@ -419,7 +427,7 @@ mod tests {
         assert_eq!(v1, v2);
     }
 
-    fn builtin_function(_: &mut Interpreter, _: Vec<Value>) -> Result<Value, String> {
+    fn builtin_function(_: &Agent, _: &[Value]) -> Result<Value, String> {
         Ok(Value::Null)
     }
 
