@@ -213,12 +213,12 @@ impl Value {
     pub fn to_string(&self, agent: &Agent) -> String {
         match self {
             Value::String(s) => format!("{}", s),
-            Value::InternedString(id) => format!("{}", &agent.string_table[*id]),
+            Value::InternedString(id) => agent.string_table[*id].to_string(),
             Value::Char(c) => format!("{}", c),
             Value::Integer(n) => format!("{}", n),
             Value::Double(n) => format!("{}", n),
             Value::Boolean(b) => format!("{}", b),
-            Value::Null => format!("null"),
+            Value::Null => "null".to_string(),
             Value::Array(vs) => vs.borrow().iter().map(|v| v.to_string(agent)).collect(),
             Value::Function(func) => {
                 let name = match **func {
