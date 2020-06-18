@@ -41,12 +41,13 @@ fn array_new(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     }
 }
 
-fn string_chars(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
-    if let Some(Value::String(s)) = args.get(0) {
-        Ok(Value::from(s.chars().map(Value::from).collect::<Vec<_>>()))
-    } else {
-        Err("string_chars: Expected string".to_string())
-    }
+fn string_chars(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    let cs = match &args[0] {
+        Value::String(s) => s.chars(),
+        Value::InternedString(id) => agent.string_table[*id].chars(),
+        _ => return Err("string_chars: Expected string".to_string()),
+    };
+    Ok(Value::from(cs.map(Value::from).collect::<Vec<_>>()))
 }
 
 fn string_from_chars(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
@@ -66,28 +67,30 @@ fn string_from_chars(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     }
 }
 
-fn string_bytes(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
-    if let Some(Value::String(s)) = args.get(0) {
-        Ok(Value::from(
-            s.bytes()
-                .map(|b| Value::from(i64::from(b)))
-                .collect::<Vec<_>>(),
-        ))
-    } else {
-        Err("string_bytes: Expected string".to_string())
-    }
+fn string_bytes(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    let bs = match &args[0] {
+        Value::String(s) => s.bytes(),
+        Value::InternedString(id) => agent.string_table[*id].bytes(),
+        _ => return Err("string_bytes: Expected string".to_string()),
+    };
+    Ok(Value::from(
+        bs.map(|b| Value::from(i64::from(b))).collect::<Vec<_>>(),
+    ))
 }
 
-fn string_concat(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
-    let mut buf = String::new();
-
-    for arg in args {
-        if let Value::String(s) = arg {
-            buf += &s;
-        } else {
-            return Err("string_concat: Expected string".to_string());
-        }
-    }
+fn string_concat(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    let buf: String = args
+        .iter()
+        .map(|arg| {
+            if let Value::String(s) = arg {
+                Ok((*s).as_str())
+            } else if let Value::InternedString(id) = arg {
+                Ok(agent.string_table[*id].as_str())
+            } else {
+                Err("string_concat: Expected string".to_string())
+            }
+        })
+        .collect::<Result<_, _>>()?;
 
     Ok(Value::String(Rc::new(buf)))
 }
@@ -132,14 +135,15 @@ fn tofloat(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
     }
 }
 
-fn read_file(_agent: &Agent, args: &[Value]) -> Result<Value, String> {
-    if let Some(Value::String(s)) = args.first() {
-        Ok(Value::from(
-            std::fs::read_to_string(&**s).map_err(|_| "Failed to read file".to_string())?,
-        ))
-    } else {
-        Err("read_file: Expected string".to_string())
-    }
+fn read_file(agent: &Agent, args: &[Value]) -> Result<Value, String> {
+    let s = match &args[0] {
+        Value::String(s) => s.as_ref(),
+        Value::InternedString(id) => &agent.string_table[*id],
+        _ => return Err("read_file: Expected string".to_string()),
+    };
+    Ok(Value::from(
+        std::fs::read_to_string(&**s).map_err(|_| "Failed to read file".to_string())?,
+    ))
 }
 
 fn argv(_agent: &Agent, _args: &[Value]) -> Result<Value, String> {

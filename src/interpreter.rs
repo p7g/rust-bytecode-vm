@@ -444,7 +444,7 @@ impl<'a> Interpreter<'a> {
     #[inline]
     fn const_string(&mut self, code: &[u8]) {
         let idx = usize::from_le_bytes(self.next_usize_bytes(&code));
-        self.push(Value::from(self.agent.string_table[idx].as_ref()));
+        self.push(Value::InternedString(idx));
     }
 
     #[inline]
@@ -1218,7 +1218,10 @@ mod tests {
         let code = bytecode.into();
 
         let result = interpreter._evaluate(code);
-        assert_eq!(result, Ok(Value::from("hello world")));
+        assert_eq!(
+            result,
+            Ok(Value::InternedString(agent.intern_string("hello world")))
+        );
     }
 
     #[test]
@@ -1778,7 +1781,10 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter._evaluate(code);
 
-        assert_eq!(result, Ok(Value::from("hello")));
+        assert_eq!(
+            result,
+            Ok(Value::InternedString(agent.intern_string("hello")))
+        );
     }
 
     #[test]
@@ -1873,7 +1879,10 @@ mod tests {
         let mut interpreter = Interpreter::new(&mut agent);
         let result = interpreter._evaluate(code);
 
-        assert_eq!(result, Ok(Value::from("hullo")));
+        assert_eq!(
+            result,
+            Ok(Value::InternedString(agent.intern_string("hullo")))
+        );
     }
 
     #[test]
