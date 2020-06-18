@@ -464,7 +464,7 @@ impl<'a> Interpreter<'a> {
     fn jump_if_true(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
-        if cond.is_truthy() {
+        if cond.is_truthy(&self.agent) {
             self.ip = to;
         }
         Ok(())
@@ -474,7 +474,7 @@ impl<'a> Interpreter<'a> {
     fn jump_if_false(&mut self, code: &[u8]) -> Result<(), String> {
         let to = usize::from_le_bytes(self.next_usize_bytes(&code));
         let cond = self.pop()?;
-        if !cond.is_truthy() {
+        if !cond.is_truthy(&self.agent) {
             self.ip = to;
         }
         Ok(())
@@ -1018,7 +1018,7 @@ impl<'a> Interpreter<'a> {
 
     #[inline]
     fn not(&mut self) -> Result<(), String> {
-        let result = Value::from(!self.top().is_truthy());
+        let result = Value::from(!self.top().is_truthy(&self.agent));
 
         self.set_top(result);
         Ok(())

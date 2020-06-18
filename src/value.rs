@@ -176,6 +176,7 @@ pub enum Value {
     Boolean(bool),
     Null,
     String(Rc<String>),
+    InternedString(usize),
     Char(char),
     Array(Rc<RefCell<Box<[Value]>>>),
     Function(Rc<FunctionValue>),
@@ -188,19 +189,20 @@ impl Value {
             Value::Double(_) => "double",
             Value::Boolean(_) => "boolean",
             Value::Null => "null",
-            Value::String(_) => "string",
+            Value::String(_) | Value::InternedString(_) => "string",
             Value::Char(_) => "char",
             Value::Array(_) => "array",
             Value::Function(_) => "function",
         }
     }
 
-    pub fn is_truthy(&self) -> bool {
+    pub fn is_truthy(&self, agent: &Agent) -> bool {
         match self {
             Value::Integer(n) => *n != 0,
             Value::Double(n) => *n != 0f64,
             Value::Boolean(b) => *b,
             Value::String(s) => !s.is_empty(),
+            Value::InternedString(id) => !agent.string_table[*id].is_empty(),
             Value::Char(_) => true,
             Value::Array(vs) => !vs.borrow().is_empty(),
             Value::Function(_) => true,
@@ -211,6 +213,7 @@ impl Value {
     pub fn to_string(&self, agent: &Agent) -> String {
         match self {
             Value::String(s) => format!("{}", s),
+            Value::InternedString(id) => format!("{}", &agent.string_table[*id]),
             Value::Char(c) => format!("{}", c),
             Value::Integer(n) => format!("{}", n),
             Value::Double(n) => format!("{}", n),
@@ -264,16 +267,22 @@ impl Value {
                 }
             }
             Value::String(a) => {
-                if let Value::String(b) = other {
-                    if a.len() != b.len() {
-                        false
-                    } else {
-                        a.chars().zip(b.chars()).all(|(a, b)| a == b)
-                    }
-                } else {
+                let b = match other {
+                    Value::String(b) => b,
+                    Value::InternedString(id) => &agent.string_table[*id],
+                    _ => return false,
+                };
+                if a.len() != b.len() {
                     false
+                } else {
+                    a.chars().zip(b.chars()).all(|(a, b)| a == b)
                 }
             }
+            Value::InternedString(id_a) => match other {
+                Value::InternedString(id_b) => id_a == id_b,
+                Value::String(b) => **b == agent.string_table[*id_a],
+                _ => false,
+            },
             Value::Char(a) => {
                 if let Value::Char(b) = other {
                     a == b
@@ -384,7 +393,25 @@ impl Default for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use crate::agent::Agent;
+
+    macro_rules! assert_eq {
+        ($a:expr, $b:expr) => {{
+            let agent = Agent::new();
+            let a: &Value = &($a);
+            let b: &Value = &($b);
+            assert!(a.eq(b, &agent));
+        }};
+    }
+
+    macro_rules! assert_ne {
+        ($a:expr, $b:expr) => {{
+            let agent = Agent::new();
+            let a: &Value = &($a);
+            let b: &Value = &($b);
+            assert!(!a.eq(&b, &agent));
+        }};
+    }
 
     #[test]
     fn test_from_int() {
@@ -453,11 +480,11 @@ mod tests {
             upvalues: Vec::new(),
         };
 
-        assert_ne!(a, b);
+        assert!(a != b);
         // might not be equal, function pointers can be different even when they point
         // to the same function
         // assert_eq!(a, c);
-        assert_eq!(b, d);
+        assert!(b == d);
 
         let av = Value::from(a);
         let bv = Value::from(b);
@@ -529,62 +556,69 @@ mod tests {
 
     #[test]
     fn test_integer_truthiness() {
+        let agent = Agent::new();
         let a = Value::from(1);
         let b = Value::from(0);
 
-        assert!(a.is_truthy());
-        assert!(!b.is_truthy());
+        assert!(a.is_truthy(&agent));
+        assert!(!b.is_truthy(&agent));
     }
 
     #[test]
     fn test_double_truthiness() {
+        let agent = Agent::new();
         let a = Value::from(1.1);
         let b = Value::from(0f64);
 
-        assert!(a.is_truthy());
-        assert!(!b.is_truthy());
+        assert!(a.is_truthy(&agent));
+        assert!(!b.is_truthy(&agent));
     }
 
     #[test]
     fn test_boolean_truthiness() {
+        let agent = Agent::new();
         let a = Value::from(true);
         let b = Value::from(false);
 
-        assert!(a.is_truthy());
-        assert!(!b.is_truthy());
+        assert!(a.is_truthy(&agent));
+        assert!(!b.is_truthy(&agent));
     }
 
     #[test]
     fn test_null_truthiness() {
-        assert!(!Value::Null.is_truthy());
+        let agent = Agent::new();
+        assert!(!Value::Null.is_truthy(&agent));
     }
 
     #[test]
     fn test_string_truthiness() {
+        let agent = Agent::new();
         let a = Value::from("hello");
         let b = Value::from("");
 
-        assert!(a.is_truthy());
-        assert!(!b.is_truthy());
+        assert!(a.is_truthy(&agent));
+        assert!(!b.is_truthy(&agent));
     }
 
     #[test]
     fn test_array_truthiness() {
+        let agent = Agent::new();
         let a = Value::from(vec![Value::Null]);
         let b = Value::from(Vec::<Value>::new());
 
-        assert!(a.is_truthy());
-        assert!(!b.is_truthy());
+        assert!(a.is_truthy(&agent));
+        assert!(!b.is_truthy(&agent));
     }
 
     #[test]
     fn test_function_truthiness() {
+        let agent = Agent::new();
         let a = Value::from(FunctionValue::Builtin {
             name: Some(123),
             arity: 3,
             function: builtin_function,
         });
 
-        assert!(a.is_truthy());
+        assert!(a.is_truthy(&agent));
     }
 }
