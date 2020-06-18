@@ -4,7 +4,7 @@
 
 - [ ] compound assignment (like `+=`)
 - [ ] atoms like `:this_is_an_atom`
-- [ ] InternedString value type for faster string comparisons
+- [x] InternedString value type for faster string comparisons
     - this would require moving away from Rust's traits (e.g. PartialEq) since
       the agent is needed to get the string value of an interned string
 - [ ] [erlang style][1] records
