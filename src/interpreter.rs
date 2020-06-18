@@ -89,9 +89,13 @@ impl<'a> Interpreter<'a> {
         self.stack.pop().ok_or("Stack underflow")
     }
 
-    fn pop_and_get(&mut self, count: usize) -> Vec<Value> {
+    fn drop_n(&mut self, count: usize) {
         self.sp -= count;
-        self.stack.split_off(self.sp).into_iter().rev().collect()
+        self.stack.truncate(self.sp);
+    }
+
+    fn top_n(&self, count: usize) -> &[Value] {
+        &self.stack[self.sp - count..]
     }
 
     #[inline]
@@ -503,8 +507,9 @@ impl<'a> Interpreter<'a> {
                     ..
                 } => {
                     ensure_arity!(*arity, name);
-                    let args = self.pop_and_get(num_args);
-                    let result = function(self, args)?;
+                    let args = self.top_n(num_args);
+                    let result = function(self.agent, args)?;
+                    self.drop_n(num_args);
                     self.push(result);
                 }
                 FunctionValue::User {
