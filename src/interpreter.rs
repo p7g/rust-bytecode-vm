@@ -79,11 +79,6 @@ impl<'a> Interpreter<'a> {
         self.stack.push(expr);
     }
 
-    fn pop_n(&mut self, count: usize) {
-        self.sp -= count;
-        self.stack.truncate(self.sp);
-    }
-
     fn pop(&mut self) -> Result<Value, &'static str> {
         self.sp -= 1;
         self.stack.pop().ok_or("Stack underflow")
@@ -565,7 +560,7 @@ impl<'a> Interpreter<'a> {
             uv.borrow_mut().close(self.stack[i].clone());
         }
 
-        self.pop_n(frame.num_args + self.sp - self.bp);
+        self.drop_n(frame.num_args + self.sp - self.bp);
 
         self.bp = frame.prev_bp;
         self.ip = frame.prev_ip;
