@@ -25,6 +25,43 @@ macro_rules! print_stack {
     }};
 }
 
+macro_rules! number_binop_fn {
+    ($name:ident, $intop:expr, $doubleop:expr) => {
+        number_binop_fn!($name, $intop, $doubleop, |a: i64| -> Result<i64, String> {
+            Ok(a)
+        });
+    };
+    ($name:ident, $intop:expr, $doubleop:expr, $bconvert:expr) => {
+        fn $name(&mut self) -> Result<(), String> {
+            let b = self.pop()?;
+            let a = self.pop()?;
+
+            self.push(if let Value::Integer(a) = a {
+                if let Value::Integer(b) = b {
+                    let converter = $bconvert;
+                    Value::from($intop(a, converter(b)?))
+                } else if let Value::Double(b) = b {
+                    Value::from($doubleop(a as f64, b))
+                } else {
+                    return Err(self.error(format!("Got unexpected value {:?} in {}", b, stringify!($name))));
+                }
+            } else if let Value::Double(a) = a {
+                if let Value::Integer(b) = b {
+                    Value::from($doubleop(a, b as f64))
+                } else if let Value::Double(b) = b {
+                    Value::from($doubleop(a, b))
+                } else {
+                    return Err(self.error(format!("Got unexpected value {:?} in {}", b, stringify!($name))));
+                }
+            } else {
+                return Err(self.error(format!("Got unexpected value {:?} in {}", a, stringify!($name))));
+            });
+
+            Ok(())
+        }
+    };
+}
+
 #[derive(Debug)]
 struct Frame {
     prev_ip: usize,
@@ -272,43 +309,6 @@ impl<'a> Interpreter<'a> {
             disassemble(self.agent, &code)?;
         }
 
-        macro_rules! number_binop {
-            ($name:expr, $intop:expr, $doubleop:expr) => {
-                number_binop!($name, $intop, $doubleop, |a: i64| -> Result<i64, String> {
-                    Ok(a)
-                })
-            };
-            ($name:expr, $intop:expr, $doubleop:expr, $bconvert:expr) => {{
-                let b = self.pop()?;
-                let a = self.pop()?;
-
-                self.push(if let Value::Integer(a) = a {
-                    if let Value::Integer(b) = b {
-                        let converter = $bconvert;
-                        Value::from($intop(a, converter(b)?))
-                    } else if let Value::Double(b) = b {
-                        Value::from($doubleop(a as f64, b))
-                    } else {
-                        return Err(
-                            self.error(format!("Got unexpected value {:?} in {}", b, $name))
-                        );
-                    }
-                } else if let Value::Double(a) = a {
-                    if let Value::Integer(b) = b {
-                        Value::from($doubleop(a, b as f64))
-                    } else if let Value::Double(b) = b {
-                        Value::from($doubleop(a, b))
-                    } else {
-                        return Err(
-                            self.error(format!("Got unexpected value {:?} in {}", b, $name))
-                        );
-                    }
-                } else {
-                    return Err(self.error(format!("Got unexpected value {:?} in {}", a, $name)));
-                })
-            }};
-        }
-
         let code_len = code.len();
         while self.ip < code_len {
             let instruction = self.next_instruction(&code);
@@ -340,19 +340,12 @@ impl<'a> Interpreter<'a> {
                 OpCode::ConstString => self.const_string(&code),
                 OpCode::ConstChar => self.const_char(&code),
 
-                OpCode::Add => number_binop!("addition", i64::wrapping_add, f64::add),
-                OpCode::Sub => number_binop!("subtraction", i64::wrapping_sub, f64::sub),
-                OpCode::Mul => number_binop!("multiplication", i64::wrapping_mul, f64::mul),
-                OpCode::Div => number_binop!("division", i64::wrapping_div, f64::div),
-                OpCode::Mod => number_binop!("modulus", i64::wrapping_rem, f64::rem),
-                OpCode::Exp => number_binop!(
-                    "exponentiation",
-                    i64::wrapping_pow,
-                    f64::powf,
-                    |b: i64| -> Result<u32, String> {
-                        b.try_into().map_err(|_| "Integer overflow".to_string())
-                    }
-                ),
+                OpCode::Add => self.add()?,
+                OpCode::Sub => self.sub()?,
+                OpCode::Mul => self.mul()?,
+                OpCode::Div => self.div()?,
+                OpCode::Mod => self.mod_()?,
+                OpCode::Exp => self.exp()?,
 
                 OpCode::Jump => self.jump(&code),
                 OpCode::JumpIfTrue => self.jump_if_true(&code)?,
@@ -474,6 +467,18 @@ impl<'a> Interpreter<'a> {
         }
         Ok(())
     }
+
+    number_binop_fn!(add, i64::wrapping_add, f64::add);
+    number_binop_fn!(sub, i64::wrapping_sub, f64::sub);
+    number_binop_fn!(mul, i64::wrapping_mul, f64::mul);
+    number_binop_fn!(div, i64::wrapping_div, f64::div);
+    number_binop_fn!(mod_, i64::wrapping_rem, f64::rem);
+    number_binop_fn!(exp, i64::wrapping_pow, f64::powf, |b: i64| -> Result<
+        u32,
+        String,
+    > {
+        b.try_into().map_err(|_| "Integer overflow".to_string())
+    });
 
     fn call(&mut self, code: &[u8]) -> Result<(), String> {
         let function = self.pop()?;
